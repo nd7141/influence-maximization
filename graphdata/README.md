@@ -1,9 +1,9 @@
  
 ####This folder contains several different types of graphs.####
 
-* Hep.txt – A collaboration graph crawled from arXiv.org, High Energy Physics – Theory section, from year 1991 to year 2003.
+* hep.txt – A collaboration graph crawled from arXiv.org, High Energy Physics – Theory section, from year 1991 to year 2003.
 
-* Phy.txt – A collaboration graph crawled from arXiv.org, Physics section.
+* phy.txt – A collaboration graph crawled from arXiv.org, Physics section.
 
 * graph30.txt - random graph with 30 vertices and 120 edges (created by networkx.py)
 
