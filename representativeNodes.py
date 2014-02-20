@@ -1,10 +1,9 @@
+''' Implementation of heuristic that searches for broadest set of vertices
+of size k using priority queues
+'''
 __author__ = 'ivanovsergey'
 
 from priorityQueue import PriorityQueue as PQ # priority queue class
-from IC import runIC
-import networkx as nx
-import matplotlib.pylab as plt
-
 
 def _sumDist (G, S, no):
     ''' Compute cumulative distance from node to set S
@@ -93,25 +92,4 @@ def representativeNodes(G, k, metric=1):
     return S, objv
 
 if __name__ == '__main__':
-    import time
-    start = time.time()
-
-    G = nx.Graph()
-    with open('graphdata/hep.txt') as f:
-        n, m = f.readline().split()
-        for line in f:
-            u, v = map(int, line.split())
-            try:
-                G[u][v]['weight'] += 1
-            except:
-                G.add_edge(u,v, weight=1)
-    print time.time() - start
-
-    S, objv = representativeNodes(G, 200)
-    print time.time() - start
-
-    T = runIC(G, S)
-    print time.time() - start
-    print len(T)
-
     console = []
