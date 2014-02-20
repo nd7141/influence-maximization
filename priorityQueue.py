@@ -30,7 +30,7 @@ class PriorityQueue(object):
             priority, count, task = heappop(self.pq)
             if task is not self.REMOVED:
                 del self.entry_finder[task]
-                return priority, task
+                return task, priority
         raise KeyError('pop from an empty priority queue')
 
 

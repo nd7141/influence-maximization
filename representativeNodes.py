@@ -64,7 +64,7 @@ def representativeNodes(G, k, metric=1):
 
     # add new nodes to the set greedily
     while len(S) < k:
-        priority, u = S_dist.pop_item() # find maximum value of distance to set S
+        u, priority = S_dist.pop_item() # find maximum value of distance to set S
         S.append(u) # append that node to S
 
         # only increase distance for nodes that are connected to u
