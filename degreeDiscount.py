@@ -4,7 +4,6 @@ of influence propagation in graph G
 [1] -- Wei Chen et al. Efficient influence maximization in Social Networks
 '''
 __author__ = 'ivanovsergey'
-
 from priorityQueue import PriorityQueue as PQ # priority queue
 
 def degreeDiscountIC (G, k, p=.1):
@@ -30,8 +29,8 @@ def degreeDiscountIC (G, k, p=.1):
         S.append(u)
         for v in G[u].keys() :
             if v in dd.entry_finder:
-                t[v] += 1
-                priority = (len(G[v].keys()) - 2*t[v] - (len(G[v].keys()) - t[v])*t[v]*p)
+                t[v] += G[u][v]['weight'] # increase number of selected neighbors
+                priority = len(G[v].keys()) - 2*t[v] - (len(G[v].keys()) - t[v])*t[v]*p
                 dd.add_task(v, -priority)
     return S
 
