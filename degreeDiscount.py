@@ -6,8 +6,8 @@ of influence propagation in graph G
 __author__ = 'ivanovsergey'
 from priorityQueue import PriorityQueue as PQ # priority queue
 
-def degreeDiscountIC (G, k, p=.1):
-    ''' Finds initial set of nodes to propagate in Independent Cascade model
+def degreeDiscountIC (G, k, p=.01):
+    ''' Finds initial set of nodes to propagate in Independent Cascade model (with priority queue)
     Input: G -- networkx graph object
     k -- number of nodes needed
     p -- propagation probability
@@ -17,10 +17,13 @@ def degreeDiscountIC (G, k, p=.1):
     S = []
     dd = PQ() # degree discount
     t = dict() # number of adjacent vertices that are in S
+    d = dict() # degree of each vertex
 
     # initialize degree discount
     for u in G.nodes():
-        dd.add_task(u, -len(G[u])) # add degree of each node
+        d[u] = sum([G[u][v]['weight'] for v in G[u]]) # each edge adds degree 1
+        # d[u] = len(G[u]) # each neighbor adds degree 1
+        dd.add_task(u, -d[u]) # add degree of each node
         t[u] = 0
 
     # add vertices to S greedily
@@ -29,9 +32,37 @@ def degreeDiscountIC (G, k, p=.1):
         S.append(u)
         for v in G[u].keys() :
             if v in dd.entry_finder:
-                t[v] += G[u][v]['weight'] # increase number of selected neighbors
-                priority = len(G[v].keys()) - 2*t[v] - (len(G[v].keys()) - t[v])*t[v]*p
+                t[v] += 1 # increase number of selected neighbors
+                priority = d[v] - 2*t[v] - (d[v] - t[v])*t[v]*p
                 dd.add_task(v, -priority)
+    return S
+
+def degreeDiscountIC2(G, k, p=.01):
+    ''' Finds initial set of nodes to propagate in Independent Cascade model (without priority queue)
+    Input: G -- networkx graph object
+    k -- number of nodes needed
+    p -- propagation probability
+    Output:
+    S -- chosen k nodes
+    Note: the routine runs twice slower than using PQ. Implemented to verify results
+    '''
+    d = dict()
+    dd = dict() # degree discount
+    t = dict() # number of selected neighbors
+    S = [] # selected set of nodes
+    for u in G:
+        d[u] = sum([G[u][v]['weight'] for v in G[u]]) # each edge adds degree 1
+        # d[u] = len(G[u]) # each neighbor adds degree 1
+        dd[u] = d[u]
+        t[u] = 0
+    for i in range(k):
+        u, ddv = max(dd.iteritems(), key=lambda (k,v): v)
+        dd.pop(u)
+        S.append(u)
+        for v in G[u]:
+            if v not in S:
+                t[v] += 1 # increase number of selected neighbors
+                dd[v] = d[v] - 2*t[v] - (d[v] - t[v])*t[v]*p
     return S
 
 if __name__ == '__main__':
