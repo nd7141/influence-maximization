@@ -11,3 +11,11 @@ Degree discount heuristic was proposed first by [Chen et al.](http://snap.stanfo
 Representative Nodes Algorithm
 ------------------------------
 Representative nodes heuristic is searching for the set of k nodes such that its size is maximum. Two different definitions of set size are used. First is cumulative sum of all distances between each pair of vertices inside the set. Second is minimum distance between a pair of vertices in the set. Algorithm didn't show significant results, probably because small differences in edge weights don't make some vertices be "more influential" than others. 
+
+General Greedy Algorithm
+------------------------
+General greedy heuristic is iterative method, each step it chooses node that along with already chosen nodes will bring the most propagation. Since propagation is random process for each node it runs R iteration of RanCas to calculate the average number of nodes it reaches. Running time is O(knRm). Source: [Chen et al.](http://snap.stanford.edu/class/cs224w-readings/chen09influence.pdf) (Algorithm 1)
+
+New Greedy IC Algorithm
+-----------------------
+newGreedyIC heuristic reduces the amount of iterations in general greedy algorithm. Running time is O(kRm). Source: [Chen et al.](http://snap.stanford.edu/class/cs224w-readings/chen09influence.pdf) (Algorithm 2)
