@@ -9,13 +9,21 @@ def runIC (G, S, p = .01):
     p -- propagation probability
     Output: T -- resulted influenced set of vertices (including S)
     '''
-    from copy import copy
+    from copy import deepcopy
     from random import random
-    T = copy(S)
-    for u in T: # T may increase size during iterations
-        for v in G[u].keys(): # check whether new node v is influenced by chosen node u
+    T = deepcopy(S)
+    i = 0
+    while i < len(T):
+        for v in G[T[i]].keys():
             if v not in T and random() < p:
                 T.append(v)
+        i += 1
+
+    # legitimate version with dynamically changing list: http://stackoverflow.com/a/15725492/2069858
+    # for u in T: # T may increase size during iterations
+    #     for v in G[u].keys(): # check whether new node v is influenced by chosen node u
+    #         if v not in T and random() < p:
+    #             T.append(v)
     return T
 
 def runIC2(G, S, p=.01):
