@@ -33,13 +33,13 @@ if __name__ == '__main__':
     print time.time() - start
 
     #calculate initial set
-    seed_size = 30
-    S = degreeDiscountIC(G, seed_size, p=.1)
+    seed_size = 50
+    S = degreeDiscountIC(G, seed_size)
     print 'Initial set of', seed_size, 'nodes chosen'
     print time.time() - start
 
     # calculate average activated set size
-    iterations = 200 # number of iterations
+    iterations = 1000 # number of iterations
     avg = 0
     for i in range(iterations):
         T = runIC(G, S)
