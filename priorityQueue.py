@@ -33,6 +33,14 @@ class PriorityQueue(object):
                 return task, priority
         raise KeyError('pop from an empty priority queue')
 
+    def __str__(self):
+        return str([entry for entry in self.pq if entry[2] != self.REMOVED])
 
+
+pq = PriorityQueue()
+pq.add_task(pq.REMOVED, -100)
+pq.add_task(1, -75)
+pq.add_task(2, -50)
+pq.add_task(pq.REMOVED, -25)
 if __name__ == '_main__':
     console = []
