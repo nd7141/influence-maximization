@@ -61,7 +61,7 @@ def degreeDiscountIC2(G, k, p=.01):
         S.append(u)
         for v in G[u]:
             if v not in S:
-                t[v] += 1 # increase number of selected neighbors
+                t[v] += G[u][v]['weight'] # increase number of selected neighbors
                 dd[v] = d[v] - 2*t[v] - (d[v] - t[v])*t[v]*p
     return S
 
