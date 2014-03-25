@@ -11,18 +11,24 @@ def runIC (G, S, p = .01):
     '''
     from copy import deepcopy
     from random import random
-    T = deepcopy(S)
+    T = deepcopy(S) # copy already selected nodes
+
+    # ugly C++ version
     i = 0
     while i < len(T):
-        for v in G[T[i]].keys():
-            if v not in T and random() < p:
-                T.append(v)
+        for v in G[T[i]]: # for neighbors of a selected node
+            if v not in T: # if it wasn't selected yet
+                w = G[T[i]][v]['weight'] # count the number of edges between two nodes
+                if random() <= 1 - (1-p)**w: # if at least one of edges propagate influence
+                    T.append(v)
         i += 1
 
+    # neat pythonic version
     # legitimate version with dynamically changing list: http://stackoverflow.com/a/15725492/2069858
     # for u in T: # T may increase size during iterations
-    #     for v in G[u].keys(): # check whether new node v is influenced by chosen node u
-    #         if v not in T and random() < p:
+    #     for v in G[u]: # check whether new node v is influenced by chosen node u
+    #         w = G[u][v]['weight']
+    #         if v not in T and random() < 1 - (1-p)**w:
     #             T.append(v)
     return T
 
@@ -44,9 +50,10 @@ def runIC2(G, S, p=.01):
     while Acur:
         values = dict()
         for u in Acur:
-            for v in G[u].keys():
+            for v in G[u]:
                 if v not in T:
-                    if random.random() < p:
+                    w = G[u][v]['weight']
+                    if random.random() < 1 - (1-p)**w:
                         Anext.append((v, u))
         Acur = [edge[0] for edge in Anext]
         print i, Anext
