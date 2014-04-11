@@ -61,3 +61,9 @@ def runIC2(G, S, p=.01):
         T.extend(Acur)
         Anext = []
     return T
+    
+def avgSize(G,S,p,iterations):
+    avg = 0
+    for i in range(iterations):
+        avg += float(len(runIC(G,S,p)))/iterations
+    return avg
