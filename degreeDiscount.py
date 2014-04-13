@@ -64,6 +64,29 @@ def degreeDiscountIC2(G, k, p=.01):
                 t[v] += G[u][v]['weight'] # increase number of selected neighbors
                 dd[v] = d[v] - 2*t[v] - (d[v] - t[v])*t[v]*p
     return S
+    
+def degreeDiscountStar(G,k,p=.01):
+    
+    S = []
+    scores = PQ()
+    d = dict()
+    t = dict()
+    for u in G:
+        d[u] = sum([G[u][v]['weight'] for v in G[u]])
+        t[u] = 0
+        score = -((1-p)**t[u])*(1+(d[u]-t[u])*p)
+        scores.add_task(u, )
+    for iteration in range(k):
+        u, priority = scores.pop_item()
+        print iteration, priority
+        S.append(u)
+        for v in G[u]:
+            if v not in S:
+                t[v] += G[u][v]['weight']
+                score = -((1-p)**t[u])*(1+(d[u]-t[u])*p)
+                scores.add_task(v, score)
+    return S
+            
 
 if __name__ == '__main__':
     console = []
