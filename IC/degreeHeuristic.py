@@ -5,7 +5,7 @@ Takes k nodes with the largest degree.
 [1] -- Wei Chen et al. Efficient influence maximization in Social Networks
 '''
 __author__ = 'ivanovsergey'
-from priorityQueue import PriorityQueue as PQ # priority queue
+from IC.priorityQueue import PriorityQueue as PQ # priority queue
 
 def degreeHeuristic(G, k, p=.01):
     ''' Finds initial set of nodes to propagate in Independent Cascade model (with priority queue)

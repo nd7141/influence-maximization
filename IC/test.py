@@ -2,18 +2,12 @@
 '''
 __author__ = 'ivanovsergey'
 
-from IC import runIC, runIC2
-from representativeNodes import representativeNodes
-from degreeDiscount import degreeDiscountIC, degreeDiscountIC2, degreeDiscountStar
-from singleDiscount import singleDiscount
-from generalGreedy import generalGreedy
-from newGreedyIC import newGreedyIC
-from degreeHeuristic import degreeHeuristic
-from randomHeuristic import randomHeuristic
 import networkx as nx
+
+from IC import runIC
+from degreeDiscount import degreeDiscountIC
+
 #import matplotlib.pylab as plt
-import multiprocessing # for parallelizing IC running
-from itertools import repeat, izip
 import os
 
 if __name__ == '__main__':
@@ -22,7 +16,7 @@ if __name__ == '__main__':
 
     # read in graph
     G = nx.Graph()
-    with open('graphdata/hep.txt') as f:
+    with open('graphdata/../graphdata/hep.txt') as f:
         n, m = f.readline().split()
         for line in f:
             u, v = map(int, line.split())
@@ -35,7 +29,7 @@ if __name__ == '__main__':
     print time.time() - start
 
     #calculate initial set
-    seed_size = 5
+    seed_size = 10
     S = degreeDiscountIC(G, seed_size)
     print 'Initial set of', seed_size, 'nodes chosen'
     print time.time() - start
@@ -54,5 +48,10 @@ if __name__ == '__main__':
         # print i, 'iteration of IC'
     print 'Avg. Targeted', int(round(avg)), 'nodes out of', len(G)
     print time.time() - start
+
+    with open('IC/lemma1.txt', 'w') as f:
+        f.write(str(len(S)) + os.linesep)
+        for node in T:
+            f.write(str(node) + os.linesep)
 
     console = []

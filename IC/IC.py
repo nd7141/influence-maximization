@@ -20,6 +20,7 @@ def runIC (G, S, p = .01):
             if v not in T: # if it wasn't selected yet
                 w = G[T[i]][v]['weight'] # count the number of edges between two nodes
                 if random() <= 1 - (1-p)**w: # if at least one of edges propagate influence
+                    print T[i], 'influences', v
                     T.append(v)
         i += 1
 

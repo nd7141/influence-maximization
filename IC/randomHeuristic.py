@@ -5,7 +5,7 @@ Takes k nodes uniformly at random
 [1] -- Wei Chen et al. Efficient influence maximization in Social Networks
 '''
 __author__ = 'ivanovsergey'
-from priorityQueue import PriorityQueue as PQ # priority queue
+
 
 def randomHeuristic(G, k, p=.01):
     ''' Finds initial set of nodes to propagate in Independent Cascade model

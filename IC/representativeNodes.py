@@ -3,7 +3,7 @@ of size k using priority queues
 '''
 __author__ = 'ivanovsergey'
 
-from priorityQueue import PriorityQueue as PQ # priority queue class
+from IC.priorityQueue import PriorityQueue as PQ # priority queue class
 
 def _sumDist (G, S, no):
     ''' Compute cumulative distance from node to set S

@@ -1,9 +1,12 @@
 __author__ = 'ivanovsergey'
 
-from degreeDiscount import degreeDiscountIC
-from IC import runIC, avgSize
+import math
+
 import networkx as nx
-import os, math
+
+from degreeDiscount import degreeDiscountIC
+from IC.IC import avgSize
+
 
 def binaryDegreeDiscount (G, tsize, p=.01, a=0.38, step=5, iterations=200):
     ''' Finds minimal number of nodes necessary to reach tsize number of nodes
@@ -74,7 +77,7 @@ if __name__ == '__main__':
 
     # read in graph
     G = nx.Graph()
-    with open('graphdata/hep.txt') as f:
+    with open('graphdata/../graphdata/hep.txt') as f:
         n, m = f.readline().split()
         for line in f:
             u, v = map(int, line.split())

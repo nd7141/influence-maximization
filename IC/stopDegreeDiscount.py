@@ -4,11 +4,14 @@ of influence propagation in graph G
 [1] -- Wei Chen et al. Efficient influence maximization in Social Networks (algorithm 4)
 '''
 __author__ = 'ivanovsergey'
-from priorityQueue import PriorityQueue as PQ # priority queue
-from IC import runIC, avgSize
-import networkx as nx
-from spreadDegreeDiscount import binarySearchBoundary
 import math
+
+import networkx as nx
+
+from priorityQueue import PriorityQueue as PQ # priority queue
+from IC import avgSize
+from IC.spreadDegreeDiscount import binarySearchBoundary
+
 
 def stopDegreeDiscount(G, tsize, ic_step=1, p=.01, iterations=200):
     ''' Finds initial set of nodes to propagate in Independent Cascade model (with priority queue)
@@ -66,7 +69,7 @@ if __name__ == '__main__':
 
     # read in graph
     G = nx.Graph()
-    with open('graphdata/hep.txt') as f:
+    with open('graphdata/../graphdata/hep.txt') as f:
         n, m = f.readline().split()
         for line in f:
             u, v = map(int, line.split())
@@ -77,7 +80,7 @@ if __name__ == '__main__':
     print 'Built graph G'
     print time.time() - start
 
-    tsize = 200
+    tsize = 50
     S, Tsize = stopDegreeDiscount(G, tsize, ic_step=int(tsize*0.38*2/3))
     print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(S), tsize)
     print time.time() - start
