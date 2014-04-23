@@ -89,7 +89,6 @@ def runLT(G, S, Ew):
                         Snew.append(v)
                         T.append(v)
         Sj = deepcopy(Snew)
-
     return T
 
 def avgLT(G, S, Ew, iterations):

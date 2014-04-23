@@ -4,7 +4,7 @@ of influence propagation in graph G
 [1] -- Wei Chen et al. Efficient influence maximization in Social Networks (algorithm 4)
 '''
 __author__ = 'ivanovsergey'
-from IC.priorityQueue import PriorityQueue as PQ # priority queue
+from priorityQueue import PriorityQueue as PQ # priority queue
 
 def degreeDiscountIC(G, k, p=.01):
     ''' Finds initial set of nodes to propagate in Independent Cascade model (with priority queue)

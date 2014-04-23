@@ -5,7 +5,7 @@ of influence propagation in graph G
 '''
 __author__ = 'ivanovsergey'
 
-from IC.priorityQueue import PriorityQueue as PQ # priority queue
+from priorityQueue import PriorityQueue as PQ # priority queue
 
 def singleDiscount(G, k, p=.1):
     ''' Finds initial set of nodes to propagate in Independent Cascade model (with priority queue)

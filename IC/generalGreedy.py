@@ -4,7 +4,7 @@
 '''
 __author__ = 'ivanovsergey'
 
-from IC.priorityQueue import PriorityQueue as PQ
+from priorityQueue import PriorityQueue as PQ
 from IC.IC import runIC
 
 def generalGreedy(G, k, p=.01):
