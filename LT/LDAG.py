@@ -1,6 +1,7 @@
 from __future__ import division
 from priorityQueue import PriorityQueue as PQ
 import networkx as nx
+from copy import deepcopy
 
 def FIND_LDAG(G, v, t, Ew):
     '''
@@ -26,7 +27,7 @@ def FIND_LDAG(G, v, t, Ew):
 
     D = nx.DiGraph()
     while M >= t:
-        print M, t, x
+        # print M, t, x
         out_edges = G.out_edges([x], data=True)
         for (v1,v2,edata) in out_edges:
             if v2 in X:
@@ -48,3 +49,41 @@ def FIND_LDAG(G, v, t, Ew):
         X.append(x)
 
     return D
+
+def tsort (D, u):
+    '''
+     Topological sort of DAG D with vertex u first.
+     NOTE: vertex u has no outgoing edges.
+    '''
+    Dc = deepcopy(D)
+    L = []
+    S = [u]
+    for node in S:
+        L.append(node)
+        in_edges = Dc.in_edges([node], data=True)
+        for (v1,v2, edata) in in_edges:
+            assert v2 == node, 'Second node should be the same'
+            Dc.remove_edge(v1, node)
+            if not Dc.out_edges([v1]):
+                S.append(v1)
+    if len(Dc.edges()):
+        raise ValueError, 'D has cycles. No topological order.'
+    return L
+
+# TODO check computeAlpha for one particular node (eg next to u)
+
+def computeAlpha(D, Ew, S, u):
+    A = dict()
+    A[u] = 1
+
+    order = tsort(D, u)
+    for node in order:
+        if node not in S + [u]:
+            A[node] = 0
+            out_edges = D.out_edges([node], data=True)
+            for (v1,v2, edata) in out_edges:
+                assert v1 == node, 'First node should be the same'
+                if v2 in order:
+                    print v1, v2, edata
+                    A[node] += edata['weight']*Ew[(node, v2)]*A[v2]
+    return A
