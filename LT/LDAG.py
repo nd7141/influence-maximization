@@ -50,40 +50,52 @@ def FIND_LDAG(G, v, t, Ew):
 
     return D
 
-def tsort (D, u):
+def tsort (D, u, Ru):
     '''
      Topological sort of DAG D with vertex u first.
      NOTE: vertex u has no outgoing edges.
     '''
     Dc = deepcopy(D)
-    L = []
-    S = [u]
-    for node in S:
-        L.append(node)
+    L = [u]
+    for node in L:
         in_edges = Dc.in_edges([node], data=True)
-        for (v1,v2, edata) in in_edges:
+        for (v1, v2, edata) in in_edges:
             assert v2 == node, 'Second node should be the same'
             Dc.remove_edge(v1, node)
-            if not Dc.out_edges([v1]):
-                S.append(v1)
+            if not Dc.out_edges([v1]) and v1 in Ru:
+                L.append(v1)
     if len(Dc.edges()):
         raise ValueError, 'D has cycles. No topological order.'
     return L
 
-# TODO check computeAlpha for one particular node (eg next to u)
+def DFS_inreach (D, u):
+    ''' Depth-First search of nodes in D that can reach u.
+    '''
+    # initialize first nodes
+    Ru = map(lambda (v1,v2): v1, D.in_edges([u]))
+    for node in Ru:
+        in_edges = map(lambda (v1,v2): v1, D.in_edges([node]))
+        for v1 in in_edges:
+            if v1 not in Ru:
+                Ru.append(v1)
+    return Ru
 
 def computeAlpha(D, Ew, S, u):
     A = dict()
     A[u] = 1
-
-    order = tsort(D, u)
-    for node in order:
+    # compute nodes that can reach u in D
+    Ru = DFS_inreach(D, u)
+    order = tsort(D, u, Ru)
+    for node in order[1:]: # miss first node that already has computed Alpha
+        A[node] = 0
         if node not in S + [u]:
-            A[node] = 0
             out_edges = D.out_edges([node], data=True)
             for (v1,v2, edata) in out_edges:
                 assert v1 == node, 'First node should be the same'
                 if v2 in order:
-                    print v1, v2, edata
+                    print v1, v2, edata, Ew[(node, v2)], A[v2]
                     A[node] += edata['weight']*Ew[(node, v2)]*A[v2]
     return A
+
+def computeActProb(D, Ew, S, u):
+    pass
