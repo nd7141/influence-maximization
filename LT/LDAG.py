@@ -53,7 +53,6 @@ def FIND_LDAG(G, v, t, Ew):
 def tsort(D, u, Ru, reach):
     '''
      Topological sort of DAG D with vertex u first.
-     NOTE: vertex u has no outgoing edges.
     '''
     Dc = deepcopy(D)
     L = [u]
@@ -73,27 +72,30 @@ def tsort(D, u, Ru, reach):
                 Dc.remove_edge(node, v2)
                 if not Dc.in_edges([v2]) and v2 in Ru:
                     L.append(v2)
-    if len(Dc.edges()):
-        raise ValueError, 'D has cycles. No topological order.'
+    # if len(Dc.edges()):
+    #     raise ValueError, 'D has cycles. No topological order.'
     return L
 
 def DFS_reach (D, u, reach):
     ''' Depth-First search of nodes in D that can reach u.
+    Input:
+    reach == "in" -- nodes that can reach u
+    reach == "out" -- nodes that are reachable from u
     '''
-    # initialize first nodes
+    Dc = nx.DiGraph()
     if reach == "in":
-        Ru = map(lambda (v1,v2): v1, D.in_edges([u]))
-    elif reach == "out":
-        Ru = map(lambda (v1,v2): v1, D.out_edges([u]))
-    for node in Ru:
-        if reach == "in":
-            reach_edges = map(lambda (v1,v2): v1, D.in_edges([node]))
-        elif reach == "out":
-            reach_edges = map(lambda (v1,v2): v1, D.out_edges([node]))
-        for v1 in reach_edges:
-            if v1 not in Ru:
-                Ru.append(v1)
-    return Ru
+        Dc.add_edges_from(D.in_edges([u], data=True))
+        in_nodes = map(lambda (v1,v2): v1, D.in_edges([u]))
+        for node in in_nodes:
+            Dc.add_edges_from(D.in_edges([node], data=True))
+            in_nodes.extend(filter(lambda v: v not in in_nodes, map(lambda (v1,v2): v1, D.in_edges([node]))))
+    elif reach == "out": # the same just for outcoming edges
+        Dc.add_edges_from(D.out_edges([u], data=True))
+        out_nodes = map(lambda (v1,v2): v2, D.out_edges([u]))
+        for node in out_nodes:
+            Dc.add_edges_from(D.out_edges([node], data=True))
+            out_nodes.extend(filter(lambda v: v not in out_nodes, map(lambda (v1,v2): v2, D.out_edges([node]))))
+    return Dc
 
 def computeAlpha(D, Ew, S, u):
     A = dict()
@@ -114,4 +116,19 @@ def computeAlpha(D, Ew, S, u):
 
 # TODO implement computeActProb with DFS_reach and tsort routines
 def computeActProb(D, Ew, S, u):
-    pass
+    ap = dict()
+    ap[u] = 1
+    for node in S:
+        ap[node] = 1
+    Ru = DFS_reach(D, u, "out")
+    order = tsort(D, u, Ru, "out")
+
+    for node in order:
+        if node not in S + [u]:
+            ap[node] = 0
+            in_edges = D.in_edges([node], data=True)
+            for (v1, v2, edata) in in_edges:
+                assert v2 == node, 'Second node should be the same'
+                if v1 in order:
+                    ap[node] += ap[v1]*Ew[(v1, node)]*edata['weight']
+    return ap
