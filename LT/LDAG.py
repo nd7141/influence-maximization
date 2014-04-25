@@ -50,34 +50,31 @@ def FIND_LDAG(G, v, t, Ew):
 
     return D
 
-def tsort(D, u, Ru, reach):
+def tsort(Dc, u, reach):
     '''
      Topological sort of DAG D with vertex u first.
     '''
-    Dc = deepcopy(D)
     L = [u]
     if reach == "in":
         for node in L:
-            in_edges = Dc.in_edges([node], data=True)
-            for (v1, v2, edata) in in_edges:
-                assert v2 == node, 'Second node should be the same'
-                Dc.remove_edge(v1, node)
-                if not Dc.out_edges([v1]) and v1 in Ru:
-                    L.append(v1)
-    elif reach == "out":
+            in_nodes = map(lambda (v1, v2): v1, Dc.in_edges([node]))
+            Dc.remove_edges_from(Dc.in_edges([node]))
+            for v in in_nodes:
+                if not Dc.out_edges([v]):
+                    L.append(v)
+    elif reach == "out": # the same just for outcoming edges
         for node in L:
-            out_edges = Dc.out_edges([node], data=True)
-            for (v1, v2, edata) in out_edges:
-                assert v1 == node, 'Second node should be the same'
-                Dc.remove_edge(node, v2)
-                if not Dc.in_edges([v2]) and v2 in Ru:
-                    L.append(v2)
-    # if len(Dc.edges()):
-    #     raise ValueError, 'D has cycles. No topological order.'
+            out_nodes = map(lambda (v1, v2): v2, Dc.out_edges([node]))
+            Dc.remove_edges_from(Dc.out_edges([node]))
+            for v in out_nodes:
+                if not Dc.in_edges([v]):
+                    L.append(v)
+    if len(Dc.edges()):
+        raise ValueError, "D has cycles. No topological order."
     return L
 
-def DFS_reach (D, u, reach):
-    ''' Depth-First search of nodes in D that can reach u.
+def BFS_reach (D, u, reach):
+    ''' Breadth-First search of nodes in D that can reach u.
     Input:
     reach == "in" -- nodes that can reach u
     reach == "out" -- nodes that are reachable from u
@@ -101,8 +98,8 @@ def computeAlpha(D, Ew, S, u):
     A = dict()
     A[u] = 1
     # compute nodes that can reach u in D
-    Ru = DFS_reach(D, u, reach="in")
-    order = tsort(D, u, Ru, reach="in")
+    Dc = BFS_reach(D, u, reach="in")
+    order = tsort(Dc, u, reach="in")
     for node in order[1:]: # miss first node that already has computed Alpha
         A[node] = 0
         if node not in S + [u]:
