@@ -117,9 +117,8 @@ def computeActProb(D, Ew, S, u):
     ap[u] = 1
     for node in S:
         ap[node] = 1
-    Ru = DFS_reach(D, u, "out")
-    order = tsort(D, u, Ru, "out")
-
+    Dc = BFS_reach(D, u, "out")
+    order = tsort(Dc, u, "out")
     for node in order:
         if node not in S + [u]:
             ap[node] = 0
