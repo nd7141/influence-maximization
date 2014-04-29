@@ -53,23 +53,28 @@ def FIND_LDAG(G, v, t, Ew):
 def tsort(Dc, u, reach):
     '''
      Topological sort of DAG D with vertex u first.
+     Note: procedure alters graph Dc (in the end no edges will be present)
     '''
     L = [u]
     if reach == "in":
         for node in L:
             in_nodes = map(lambda (v1, v2): v1, Dc.in_edges([node]))
             Dc.remove_edges_from(Dc.in_edges([node]))
+            # print len(Dc.edges())
             for v in in_nodes:
-                if not Dc.out_edges([v]):
+                if len(Dc.out_edges([v])) <= 1: # for self loops number of out_edges is 1, for other nodes is 0
                     L.append(v)
     elif reach == "out": # the same just for outcoming edges
         for node in L:
             out_nodes = map(lambda (v1, v2): v2, Dc.out_edges([node]))
             Dc.remove_edges_from(Dc.out_edges([node]))
             for v in out_nodes:
-                if not Dc.in_edges([v]):
+                if len(Dc.in_edges([v])) <= 1:
                     L.append(v)
     if len(Dc.edges()):
+        print L
+        print Dc
+        print Dc.edges()
         raise ValueError, "D has cycles. No topological order."
     return L
 
@@ -96,35 +101,63 @@ def BFS_reach (D, u, reach):
 
 def computeAlpha(D, Ew, S, u):
     A = dict()
-    A[u] = 1
+    for node in D:
+        A[(u,node)] = 0
+    A[(u,u)] = 1
     # compute nodes that can reach u in D
     Dc = BFS_reach(D, u, reach="in")
     order = tsort(Dc, u, reach="in")
     for node in order[1:]: # miss first node that already has computed Alpha
-        A[node] = 0
         if node not in S + [u]:
             out_edges = D.out_edges([node], data=True)
             for (v1,v2, edata) in out_edges:
                 assert v1 == node, 'First node should be the same'
                 if v2 in order:
-                    print v1, v2, edata, Ew[(node, v2)], A[v2]
-                    A[node] += edata['weight']*Ew[(node, v2)]*A[v2]
+                    # print v1, v2, edata, Ew[(node, v2)], A[v2]
+                    A[(u,node)] += edata['weight']*Ew[(node, v2)]*A[(u,v2)]
     return A
 
-# TODO implement computeActProb with DFS_reach and tsort routines
 def computeActProb(D, Ew, S, u):
     ap = dict()
+    for node in D:
+        ap[node] = 0
     ap[u] = 1
-    for node in S:
-        ap[node] = 1
     Dc = BFS_reach(D, u, "out")
     order = tsort(Dc, u, "out")
     for node in order:
         if node not in S + [u]:
-            ap[node] = 0
             in_edges = D.in_edges([node], data=True)
             for (v1, v2, edata) in in_edges:
                 assert v2 == node, 'Second node should be the same'
                 if v1 in order:
                     ap[node] += ap[v1]*Ew[(v1, node)]*edata['weight']
     return ap
+
+def updateInfSet (D, InfSet):
+    '''
+    Updates InfSet for nodes in D.
+    '''
+    for v in D:
+        Dc = BFS_reach(D, v, "out")
+        InfSet.setdefault(v, set([])).update(Dc.nodes())
+
+def LDAG_heuristic(G, Ew, t):
+    S = []
+    IncInf = dict(zip(G.nodes(), [0]*len(G)))
+    LDAGs = dict()
+    InfSet = dict()
+    ap = dict()
+    A = dict()
+    for node in G:
+        LDAGs[node] = FIND_LDAG(G, node, t, Ew)
+        updateInfSet(LDAGs[node], InfSet)
+
+        print node
+        alpha = computeAlpha(LDAGs[node], Ew, S, node)
+        A.update(alpha)
+        for u in LDAGs[node]:
+            ap[(node, u)] = 0
+            IncInf[u] += A[(node, u)]
+    return InfSet, IncInf, ap
+
+
