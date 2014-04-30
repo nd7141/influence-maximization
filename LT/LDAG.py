@@ -72,9 +72,9 @@ def tsort(Dc, u, reach):
                 if len(Dc.in_edges([v])) <= 1:
                     L.append(v)
     if len(Dc.edges()):
-        print L
-        print Dc
-        print Dc.edges()
+        # print L
+        # print Dc
+        # print Dc.edges()
         raise ValueError, "D has cycles. No topological order."
     return L
 
@@ -99,11 +99,11 @@ def BFS_reach (D, u, reach):
             out_nodes.extend(filter(lambda v: v not in out_nodes, map(lambda (v1,v2): v2, D.out_edges([node]))))
     return Dc
 
-def computeAlpha(D, Ew, S, u):
+def computeAlpha(D, Ew, S, u, val=1):
     A = dict()
     for node in D:
         A[(u,node)] = 0
-    A[(u,u)] = 1
+    A[(u,u)] = val
     # compute nodes that can reach u in D
     Dc = BFS_reach(D, u, reach="in")
     order = tsort(Dc, u, reach="in")
@@ -141,9 +141,12 @@ def updateInfSet (D, InfSet):
         Dc = BFS_reach(D, v, "out")
         InfSet.setdefault(v, set([])).update(Dc.nodes())
 
-def LDAG_heuristic(G, Ew, t):
+def LDAG_heuristic(G, Ew, k, t):
     S = []
-    IncInf = dict(zip(G.nodes(), [0]*len(G)))
+    IncInf = PQ()
+    for node in G:
+        IncInf.add_task(node, 0)
+    # IncInf = dict(zip(G.nodes(), [0]*len(G)))
     LDAGs = dict()
     InfSet = dict()
     ap = dict()
@@ -151,13 +154,26 @@ def LDAG_heuristic(G, Ew, t):
     for node in G:
         LDAGs[node] = FIND_LDAG(G, node, t, Ew)
         updateInfSet(LDAGs[node], InfSet)
-
         print node
         alpha = computeAlpha(LDAGs[node], Ew, S, node)
         A.update(alpha)
         for u in LDAGs[node]:
             ap[(node, u)] = 0
-            IncInf[u] += A[(node, u)]
-    return InfSet, IncInf, ap
+            priority, _, _ = IncInf.entry_finder[u]
+            IncInf.add_task(u, priority - A[(node, u)])
+            # IncInf[u] += A[(node, u)]
+
+    for it in range(k):
+        s, priority = IncInf.pop_item()
+        print s, -priority
+        for v in InfSet[s]:
+            if v not in S:
+                D = LDAGs[v]
+                alpha_v_s = A[(v,s)]
+                dA = computeAlpha(D, Ew, S, s, -alpha_v_s)
+                for u in dA:
+                    A[(v,u)] += dA[(v,u)]
+                    priority, _, _ = IncInf.entry_finder[u]
+                    IncInf.add_task(u, priority - dA[(v,u)]*(1 - ap[(v,u)]))
 
 
