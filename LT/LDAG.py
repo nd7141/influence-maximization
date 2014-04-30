@@ -3,6 +3,7 @@ from priorityQueue import PriorityQueue as PQ
 import networkx as nx
 from copy import deepcopy
 
+# TODO write description for all functions and this script
 def FIND_LDAG(G, v, t, Ew):
     '''
     Compute local DAG for vertex v.
@@ -117,11 +118,11 @@ def computeAlpha(D, Ew, S, u, val=1):
                     A[(u,node)] += edata['weight']*Ew[(node, v2)]*A[(u,v2)]
     return A
 
-def computeActProb(D, Ew, S, u):
+def computeActProb(D, Ew, S, u, val=1):
     ap = dict()
     for node in D:
-        ap[node] = 0
-    ap[u] = 1
+        ap[(u,node)] = 0
+    ap[(u,u)] = val
     Dc = BFS_reach(D, u, "out")
     order = tsort(Dc, u, "out")
     for node in order:
@@ -130,7 +131,7 @@ def computeActProb(D, Ew, S, u):
             for (v1, v2, edata) in in_edges:
                 assert v2 == node, 'Second node should be the same'
                 if v1 in order:
-                    ap[node] += ap[v1]*Ew[(v1, node)]*edata['weight']
+                    ap[(u,node)] += ap[(u,v1)]*Ew[(v1, node)]*edata['weight']
     return ap
 
 def updateInfSet (D, InfSet):
@@ -141,6 +142,8 @@ def updateInfSet (D, InfSet):
         Dc = BFS_reach(D, v, "out")
         InfSet.setdefault(v, set([])).update(Dc.nodes())
 
+# TODO check correctnes of LDAG heuristic comparing to results from Chen et al. figure 3
+# TODO check for random edge weights Ewr
 def LDAG_heuristic(G, Ew, k, t):
     S = []
     IncInf = PQ()
@@ -151,29 +154,41 @@ def LDAG_heuristic(G, Ew, k, t):
     InfSet = dict()
     ap = dict()
     A = dict()
-    for node in G:
-        LDAGs[node] = FIND_LDAG(G, node, t, Ew)
-        updateInfSet(LDAGs[node], InfSet)
-        print node
-        alpha = computeAlpha(LDAGs[node], Ew, S, node)
+    for v in G:
+        LDAGs[v] = FIND_LDAG(G, v, t, Ew)
+        for u in LDAGs[v]:
+            InfSet.setdefault(u, []).append(v)
+        # updateInfSet(LDAGs[v], InfSet)
+        print v
+        alpha = computeAlpha(LDAGs[v], Ew, S, v)
         A.update(alpha)
-        for u in LDAGs[node]:
-            ap[(node, u)] = 0
+        for u in LDAGs[v]:
+            ap[(v, u)] = 0
             priority, _, _ = IncInf.entry_finder[u]
-            IncInf.add_task(u, priority - A[(node, u)])
-            # IncInf[u] += A[(node, u)]
+            IncInf.add_task(u, priority - A[(v, u)])
+            # IncInf[u] += A[(v, u)]
 
     for it in range(k):
         s, priority = IncInf.pop_item()
-        print s, -priority
+        print it, s, -priority
         for v in InfSet[s]:
             if v not in S:
                 D = LDAGs[v]
+                # update alpha_v_u for all u that can reach s in D
                 alpha_v_s = A[(v,s)]
-                dA = computeAlpha(D, Ew, S, s, -alpha_v_s)
-                for u in dA:
-                    A[(v,u)] += dA[(v,u)]
-                    priority, _, _ = IncInf.entry_finder[u]
-                    IncInf.add_task(u, priority - dA[(v,u)]*(1 - ap[(v,u)]))
-
-
+                dA = computeAlpha(D, Ew, S, s, val=-alpha_v_s)
+                for (s,u) in dA:
+                    if u not in S + [s]: # don't update IncInf if it's already in S
+                        A[(v,u)] += dA[(s,u)]
+                        # print u, IncInf.entry_finder[u]
+                        priority, _, _ = IncInf.entry_finder[u]
+                        IncInf.add_task(u, priority - dA[(s,u)]*(1 - ap[(v,u)]))
+                # update ap_v_u for all u reachable from s in D
+                dap = computeActProb(D, Ew, S + [s], s, val=1-ap[(v,s)])
+                for (s,u) in dap:
+                    if u not in S + [s]:
+                        ap[(v,u)] += dap[(s,u)]
+                        priority, _, _ = IncInf.entry_finder[u]
+                        IncInf.add_task(u, priority + A[(v,u)]*dap[(s,u)])
+        S.append(s)
+    return S
