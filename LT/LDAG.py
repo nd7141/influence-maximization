@@ -28,12 +28,10 @@ def FIND_LDAG(G, v, t, Ew):
 
     D = nx.DiGraph()
     while M >= t:
-        # print M, t, x
         out_edges = G.out_edges([x], data=True)
         for (v1,v2,edata) in out_edges:
             if v2 in X:
                 D.add_edge(v1, v2, edata)
-        # D.add_edges_from(out_edges)
         in_edges = G.in_edges([x])
         for (u,_) in in_edges:
             if u not in X:
@@ -61,7 +59,6 @@ def tsort(Dc, u, reach):
         for node in L:
             in_nodes = map(lambda (v1, v2): v1, Dc.in_edges([node]))
             Dc.remove_edges_from(Dc.in_edges([node]))
-            # print len(Dc.edges())
             for v in in_nodes:
                 if len(Dc.out_edges([v])) <= 1: # for self loops number of out_edges is 1, for other nodes is 0
                     L.append(v)
@@ -73,9 +70,6 @@ def tsort(Dc, u, reach):
                 if len(Dc.in_edges([v])) <= 1:
                     L.append(v)
     if len(Dc.edges()):
-        # print L
-        # print Dc
-        # print Dc.edges()
         raise ValueError, "D has cycles. No topological order."
     return L
 
@@ -142,8 +136,6 @@ def updateInfSet (D, InfSet):
         Dc = BFS_reach(D, v, "out")
         InfSet.setdefault(v, set([])).update(Dc.nodes())
 
-# TODO check correctnes of LDAG heuristic comparing to results from Chen et al. figure 3
-# TODO check for random edge weights Ewr
 def LDAG_heuristic(G, Ew, k, t):
     S = []
     IncInf = PQ()
@@ -154,12 +146,12 @@ def LDAG_heuristic(G, Ew, k, t):
     InfSet = dict()
     ap = dict()
     A = dict()
+    print 'Initialization phase'
     for v in G:
         LDAGs[v] = FIND_LDAG(G, v, t, Ew)
         for u in LDAGs[v]:
             InfSet.setdefault(u, []).append(v)
         # updateInfSet(LDAGs[v], InfSet)
-        print v
         alpha = computeAlpha(LDAGs[v], Ew, S, v)
         A.update(alpha)
         for u in LDAGs[v]:
@@ -167,10 +159,10 @@ def LDAG_heuristic(G, Ew, k, t):
             priority, _, _ = IncInf.entry_finder[u]
             IncInf.add_task(u, priority - A[(v, u)])
             # IncInf[u] += A[(v, u)]
-
+    print 'Main loop'
     for it in range(k):
         s, priority = IncInf.pop_item()
-        print it, s, -priority
+        print it+1, s, -priority
         for v in InfSet[s]:
             if v not in S:
                 D = LDAGs[v]
