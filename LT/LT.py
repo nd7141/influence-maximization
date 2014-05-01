@@ -93,7 +93,11 @@ def runLT(G, S, Ew):
 
 def avgLT(G, S, Ew, iterations):
     avgSize = 0
+    progress = 1
     for i in range(iterations):
+        if i == round(iterations*.1*progress) - 1:
+            print 10*progress, '% done'
+            progress += 1
         T = runLT(G, S, Ew)
         avgSize += len(T)/iterations
 
