@@ -52,20 +52,19 @@ def newGreedyIC(G, k, p=.01, S0=[]):
         prg_idx = 1
         idx = 1
         prcnt = .1 # for progress to print
-        R = 200 # number of iterations to run RanCas
+        R = 20 # number of iterations to run RanCas
         # spread from each node individually in pruned graph E
         # Rv = dict()
         # for v in G:
         #     if v not in S:
         #         Rv[v] = 0
         for j in range(R):
-            print j
             # create new pruned graph E
             E = deepcopy(G)
             edge_rem = [] # edges to remove
             for (u,v) in E.edges():
                 w = G[u][v]['weight']
-                if random() < 1 - (1 - p)**w:
+                if random() < (1 - p)**w:
                     edge_rem.append((u,v))
             E.remove_edges_from(edge_rem)
             # find reachable vertices from S
