@@ -67,33 +67,6 @@ def reverseCCWP(G, tsize, p, R, iterations):
     print 'maxL', maxL
     print 'minL', minL
 
-    # find marginal gain until we reach tsize in order os scores
-    mgain = dict()
-    orderedScores = sorted(scores.iteritems(), key = operator.itemgetter(1), reverse=True)
-    cumsum = 0
-    Stest = []
-    for (node, _) in orderedScores:
-        gain = avgSize(G, [node], p, iterations)
-        print '-----------------------'
-        print 'Pure gain', gain
-        dgain = avgSize(G, Stest + [node], p, iterations) - avgSize(G, Stest, p, iterations)
-        print 'Gross gain', dgain
-        Stest.append(node)
-        cumsum += gain
-        mgain[node] = gain
-        if cumsum >= 2*tsize:
-            break
-    orderedMgain = sorted(mgain.iteritems(), key = operator.itemgetter(1), reverse=True)
-    S = []
-    cumsum = 0
-    for (node, gain) in orderedMgain:
-        S.append(node)
-        cumsum = avgSize(G, S, p, iterations)
-        print len(S), '-->', cumsum
-        if cumsum >= tsize:
-            break
-    return S
-
     # find nodes that achieve tsize coverage starting from top-minL scores nodes
     orderedScores = sorted(scores.iteritems(), key = operator.itemgetter(1), reverse=True)
     topScores = orderedScores[:maxL]
@@ -128,7 +101,7 @@ if __name__ == '__main__':
 
     tsize = 150
     p = .01
-    R = 400
+    R = 200
     iterations = 1000
     S = reverseCCWP(G, tsize, p, R, iterations)
     print S
