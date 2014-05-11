@@ -20,6 +20,7 @@ def reverseCCWP(G, tsize, p, R, iterations):
     start = time.time()
     minL = float("Inf") # number of nodes we start with (tbd later)
     maxL = 1
+    avgL = -1
     for it in range(R):
         # remove blocked edges from graph G
         E = deepcopy(G)
@@ -54,7 +55,7 @@ def reverseCCWP(G, tsize, p, R, iterations):
             if cumsum >= tsize:
                 break
         # assign scores to L components
-        for length, numberCC in sortedCC[:curL]:
+        for length, numberCC in sortedCC[:int(2.3*curL)]:
             weighted_score = 1.0/(length*curL)
             for node in CC[numberCC]:
                 scores[node] += weighted_score
@@ -62,24 +63,46 @@ def reverseCCWP(G, tsize, p, R, iterations):
             minL = curL
         if curL > maxL:
             maxL = curL
+        print 'curL', curL
+
+        avgL += curL
 
         print it + 1, R, time.time() - start
     print 'maxL', maxL
     print 'minL', minL
+    print 'avgL', avgL/R
 
-    # find nodes that achieve tsize coverage starting from top-minL scores nodes
+    # find nodes that achieve tsize coverage starting from top-maxL scores nodes
     orderedScores = sorted(scores.iteritems(), key = operator.itemgetter(1), reverse=True)
-    topScores = orderedScores[:maxL]
+    topScores = orderedScores[:1]
     S = [node for (node,_) in topScores]
     coverage = avgSize(G, S, p, iterations)
-    print 'Top %s nodes achieved coverage: %s out of %s necessary' %(maxL, coverage, tsize)
-    extra = 0
+    print 'Top nodes achieved coverage: %s out of %s necessary' %(coverage, tsize)
+    # Penalization phase
+    scores_copied = deepcopy(scores)
+    # remove all nodes that are already in S
+    for node in S:
+        scores_copied.pop(node)
+    # add new node by one penalizing scores at the same time
     while coverage < tsize:
-        new_node, _ = orderedScores[maxL + extra]
-        S.append(new_node)
-        extra += 1
+        maxk, maxv = max(scores_copied.iteritems(), key = operator.itemgetter(1))
+        print maxv
+        S.append(maxk)
+        scores_copied.pop(maxk)
         coverage = avgSize(G, S, p, iterations)
         print '|S| = %s --> %s' %(len(S), coverage)
+        for v in G[maxk]:
+            if v not in S:
+                penalty = (1-p)**G[maxk][v]['weight']
+                scores_copied[v] *= penalty
+
+    # extra = 0
+    # while coverage < tsize:
+    #     new_node, _ = orderedScores[maxL + extra]
+    #     S.append(new_node)
+    #     extra += 1
+    #     coverage = avgSize(G, S, p, iterations)
+    #     print '|S| = %s --> %s' %(len(S), coverage)
     return S
 
 if __name__ == '__main__':
@@ -101,8 +124,8 @@ if __name__ == '__main__':
 
     tsize = 150
     p = .01
-    R = 200
-    iterations = 1000
+    R = 400
+    iterations = 300
     S = reverseCCWP(G, tsize, p, R, iterations)
     print S
     print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(S), avgSize(G, S, p, iterations))
