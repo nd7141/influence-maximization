@@ -77,7 +77,7 @@ def reverseCCWP(G, tsize, p, R, iterations):
     topScores = orderedScores[:1]
     S = [node for (node,_) in topScores]
     coverage = avgSize(G, S, p, iterations)
-    print 'Top nodes achieved coverage: %s out of %s necessary' %(coverage, tsize)
+    print '|S| = %s --> %s' %(len(S), coverage)
     # Penalization phase
     scores_copied = deepcopy(scores)
     # remove all nodes that are already in S
@@ -95,14 +95,6 @@ def reverseCCWP(G, tsize, p, R, iterations):
             if v not in S:
                 penalty = (1-p)**G[maxk][v]['weight']
                 scores_copied[v] *= penalty
-
-    # extra = 0
-    # while coverage < tsize:
-    #     new_node, _ = orderedScores[maxL + extra]
-    #     S.append(new_node)
-    #     extra += 1
-    #     coverage = avgSize(G, S, p, iterations)
-    #     print '|S| = %s --> %s' %(len(S), coverage)
     return S
 
 if __name__ == '__main__':
