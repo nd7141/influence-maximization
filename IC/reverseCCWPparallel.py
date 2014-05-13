@@ -49,19 +49,34 @@ def reverseCCWP(G, tsize, p, r):
         cumsum += length
         if cumsum >= tsize:
             break
-    # find number of next-i CCs
-    nexti_length = sortedCC[int(r*L) + 0][0] # change to 1,2,3, ..., i
-    cur_length = nexti_length
-    number_of_ties = 0 # number of additional CCs to assign score to
-    while cur_length == nexti_length:
+    # find number of CCs we assign score to
+    Llength = sortedCC[int(L) - 1][0] # change to 1,2,3, ..., i
+    # add ties with L component
+    number_of_ties = 0
+    cur_length = sortedCC[int(L) + 0][0]
+    while cur_length == Llength:
         number_of_ties += 1
-        cur_length = sortedCC[int(r*L) + number_of_ties][0]
-    # assign scores to rL + next-i components
-    numer = 0
-    for length, numberCC in sortedCC[:int(r*L) + number_of_ties]:
-        print numer, length
-        numer += 1
-        weighted_score = 1.0/(length*L)
+        cur_length = sortedCC[int(L) + number_of_ties][0]
+    # add next-i elements -- elements that have next smaller size to L-size
+    nexti_length = cur_length # next-i length is from last iteration
+    number_of_nexti = 0
+    if nexti_length == 1:
+        print 'Next-i elements have size = 1. Skip them'
+    else:
+        # add ties for size next-i
+        cur_length = nexti_length
+        while cur_length == nexti_length:
+            number_of_nexti += 1
+            cur_length = sortedCC[int(L) + number_of_ties - 1 + number_of_nexti][0]
+    # find total number of CC
+    total_number_of_CC = int(L) + number_of_ties + number_of_nexti
+    # print 'Number of ties:', number_of_ties
+    # print 'Number of next-i:', number_of_nexti
+    # print 'Total number of CC', total_number_of_CC
+    # print
+    for length, numberCC in sortedCC[:total_number_of_CC]:
+        # weighted_score = 1.0/(length*L)
+        weighted_score = 1.0
         for node in CC[numberCC]:
             scores[node] = weighted_score
     return scores, L
@@ -94,25 +109,25 @@ if __name__ == "__main__":
     tsize = 150
     p = .01
     # r = 2
-    R = 10
-    I = 20
+    R = 500
+    I = 250
     e_results = dict()
     best_r = -1
     best_S = []
     min_lenS = float("Inf")
-    for e in frange(1,1.2,.1):
+    for e in frange(1,5.5,.5):
         r_results = dict()
-        for r in frange(2.9,3.1,.1):
+        for r in frange(1.,1.1,.2):
             time2r = time.time()
-            print 'Finding solution for ratio r = %s...' %r
+            print 'Finding solution for ratio e = %s, r = %s...' %(e,r)
 
             def mapAvgSize (S):
                 return avgSize(G, S, p, I)
             def mapReverseCCWP (it):
-                print it
+                # print it
                 return reverseCCWP(G, tsize, p, r)
-            pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count() - 1)
-            pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count() - 1)
+            pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+            pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
 
             time2map = time.time()
             print 'Start mapping...'
@@ -183,7 +198,7 @@ if __name__ == "__main__":
                 best_S = deepcopy(S)
                 best_er = (e,r)
                 print 'New best (e,r) = %s with len(S) = %s' %(best_er, min_lenS)
-            print 'Time for r = %s: % sec' %(r, time.time() - time2r)
+            print 'Time for e = %s, r = %s: % sec' %(e, r, time.time() - time2r)
             print '--------------------------------------------------------------------------------'
         e_results[e] = r_results
 
