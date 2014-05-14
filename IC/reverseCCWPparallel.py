@@ -6,17 +6,8 @@ from IC import avgSize
 import networkx as nx
 import multiprocessing
 
-def reverseCCWP(G, tsize, p, r):
-    '''
-     Input:
-     G -- undirected graph (nx.Graph)
-     tsize -- coverage size (int)
-     p -- propagation probability among all edges (int)
-     r -- ratio for selecting number of components (float)
-     Output:
-     S -- seed set
-    '''
-    scores = dict() # initialize scores
+def findCC(G,p):
+
     # remove blocked edges from graph G
     E = deepcopy(G)
     edge_rem = [e for e in E.edges() if random.random() < (1-p)**(E[e[0]][e[1]]['weight'])]
@@ -38,7 +29,9 @@ def reverseCCWP(G, tsize, p, r):
                     explored[neighbor] = True
                     CC[c].append(neighbor)
                     component.extend(E[neighbor].keys())
+    return CC
 
+def findL(CC, tsize):
     # find top components that can reach tsize activated nodes
     sortedCC = sorted([(len(dv), dk) for (dk, dv) in CC.iteritems()], reverse=True)
     cumsum = 0 # sum of top components
@@ -49,37 +42,80 @@ def reverseCCWP(G, tsize, p, r):
         cumsum += length
         if cumsum >= tsize:
             break
-    # find number of CCs we assign score to
-    Llength = sortedCC[int(L) - 1][0] # change to 1,2,3, ..., i
-    # add ties with L component
-    number_of_ties = 0
-    cur_length = sortedCC[int(L) + 0][0]
-    while cur_length == Llength:
-        number_of_ties += 1
-        cur_length = sortedCC[int(L) + number_of_ties][0]
-    # add next-i elements -- elements that have next smaller size to L-size
-    nexti_length = cur_length # next-i length is from last iteration
-    number_of_nexti = 0
-    if nexti_length == 1:
-        print 'Next-i elements have size = 1. Skip them'
-    else:
-        # add ties for size next-i
-        cur_length = nexti_length
-        while cur_length == nexti_length:
-            number_of_nexti += 1
-            cur_length = sortedCC[int(L) + number_of_ties - 1 + number_of_nexti][0]
-    # find total number of CC
-    total_number_of_CC = int(L) + number_of_ties + number_of_nexti
-    # print 'Number of ties:', number_of_ties
-    # print 'Number of next-i:', number_of_nexti
-    # print 'Total number of CC', total_number_of_CC
-    # print
+    return L, sortedCC
+
+def reverseCCWP(G, tsize, p, min_length, r):
+    '''
+     Input:
+     G -- undirected graph (nx.Graph)
+     tsize -- coverage size (int)
+     p -- propagation probability among all edges (int)
+     r -- ratio for selecting number of components (float)
+     Output:
+     S -- seed set
+    '''
+    scores = dict() # initialize scores
+
+    # find CC
+    CC = findCC(G, p)
+
+    # find L and sortedCC
+    L, sortedCC = findL(CC, tsize)
+
+    # find number of CC assign scores to
+    total_number_of_CC = 0
+    N = 0
+    for length, _ in sortedCC:
+        if length >= min_length:
+            total_number_of_CC += 1
+            N += length
+        else:
+            break
+    # print 'N:', N
+    # print 'Total number of CC:', total_number_of_CC
+
     for length, numberCC in sortedCC[:total_number_of_CC]:
         # weighted_score = 1.0/(length*L)
-        weighted_score = 1.0
+        weighted_score = 1.0/(length*L)
         for node in CC[numberCC]:
             scores[node] = weighted_score
     return scores, L
+
+
+    # # find number of CCs we assign score to
+    # Llength = sortedCC[int(L) - 1][0] # change to 1,2,3, ..., i
+    # # add ties with L component
+    # number_of_ties = 0
+    # cur_length = sortedCC[int(L) + 0][0]
+    # while cur_length == Llength:
+    #     number_of_ties += 1
+    #     cur_length = sortedCC[int(L) + number_of_ties][0]
+    # # add next-i elements -- elements that have next smaller size to L-size
+    # nexti_length = cur_length # next-i length is from last iteration
+    # # print 'Next-1 length:', nexti_length
+    # number_of_nexti = 0
+    # if nexti_length == 1:
+    #     print 'Next-i elements have size = 1. Skip them'
+    # else:
+    #     # add ties for size next-i
+    #     cur_length = nexti_length
+    #     while cur_length == nexti_length:
+    #         number_of_nexti += 1
+    #         cur_length = sortedCC[int(L) + number_of_ties - 1 + number_of_nexti][0]
+    # # find total number of CC
+    # total_number_of_CC = int(L) + number_of_ties + number_of_nexti
+    # # print 'Number of ties:', number_of_ties
+    # # print 'Number of next-i:', number_of_nexti
+    # # print 'Total number of CC', total_number_of_CC
+    # # print
+    # N = sum([length for length, _ in sortedCC[:total_number_of_CC]])
+    # # print 'N:', N
+    # for length, numberCC in sortedCC[:total_number_of_CC]:
+    #     # weighted_score = 1.0/(length*L)
+    #     weighted_score = 1.0/N
+    #     for node in CC[numberCC]:
+    #         scores[node] = weighted_score
+    # return scores, L
 
 # range for floats: http://stackoverflow.com/a/7267280/2069858
 def frange(begin, end, step):
@@ -115,7 +151,22 @@ if __name__ == "__main__":
     best_r = -1
     best_S = []
     min_lenS = float("Inf")
-    for e in frange(1,5.5,.5):
+    pool2algo = None
+    pool2average = None
+
+    time2preprocess = time.time()
+    print 'Preprocessing to find minimal size of CC...'
+    min_length = float("Inf")
+    for it in range(20):
+        CC = findCC(G, p)
+        L, sortedCC = findL(CC, tsize)
+        Llength = sortedCC[L-1][0]
+        if Llength < min_length:
+            min_length = Llength
+    print 'Min |L|:', min_length
+    print 'Time to find minimal length of L CC:', time.time() - time2preprocess
+
+    for e in frange(1,1.5,.5):
         r_results = dict()
         for r in frange(1.,1.1,.2):
             time2r = time.time()
@@ -125,9 +176,11 @@ if __name__ == "__main__":
                 return avgSize(G, S, p, I)
             def mapReverseCCWP (it):
                 # print it
-                return reverseCCWP(G, tsize, p, r)
-            pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-            pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+                return reverseCCWP(G, tsize, p, min_length, r)
+            if pool2algo == None:
+                pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+            if pool2average == None:
+                pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
 
             time2map = time.time()
             print 'Start mapping...'
@@ -156,7 +209,7 @@ if __name__ == "__main__":
             # select first top-L nodes with penalization
             scores_copied = deepcopy(scores)
             S = []
-            for i in range(int(1.5*avgL)): # change range limit to minL, maxL, avgL, 1, etc.
+            for i in range(int(maxL)): # change range limit to minL, maxL, avgL, 1, etc.
                 maxk, maxv = max(scores_copied.iteritems(), key = lambda (dk, dv): dv) # top node in the order
                 S.append(maxk)
                 scores_copied.pop(maxk)
@@ -198,7 +251,7 @@ if __name__ == "__main__":
                 best_S = deepcopy(S)
                 best_er = (e,r)
                 print 'New best (e,r) = %s with len(S) = %s' %(best_er, min_lenS)
-            print 'Time for e = %s, r = %s: % sec' %(e, r, time.time() - time2r)
+            print 'Time for e = %s, r = %s: %s sec' %(e, r, time.time() - time2r)
             print '--------------------------------------------------------------------------------'
         e_results[e] = r_results
 
