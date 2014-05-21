@@ -1,75 +1,34 @@
-__author__ = 'ivanovsergey'
-
+from __future__ import division
 import math
 import networkx as nx
 from DD import DD
-from runIAC import avgIAC, randomEp, random_from_range, uniformEp
+from runIAC import *
+import os, json, operator, multiprocessing
 
-
-def binaryDegreeDiscount (G, tsize, Ep, step, I):
-    ''' Finds minimal number of nodes necessary to reach tsize number of nodes
-    using degreeDiscount algorithms and binary search.
-    Input: G -- networkx graph object
-    tsize -- number of nodes necessary to reach
-    p -- propagation probability
-    a -- fraction of tsize to use as initial seed set size
-    step -- step between iterations of binary search
-    iterations -- number of iterations to average independent cascade
-    Output:
-    S -- seed set
-    Tspread -- spread values for different sizes of seed set
+def getScores(G):
+    '''Finds scores for DD.
+    Score are degree for each node.
     '''
-    Tspread = dict()
-    # find initial total spread
-    k0 = 1
-    S = DD(G, k0, Ep)
-    t = avgIAC(G, S, Ep, I)
-    Tspread[k0] = t
-    # find bound (lower or upper) of total spread
-    k = k0
-    print k, step, Tspread[k]
-    if t >= tsize:
-        # find the value of k that doesn't spread influence up to tsize nodes
-        step *= -1
-        while t >= tsize:
-            # reduce step if necessary
-            while k + step < 0:
-                step = int(math.ceil(float(step)/2))
-            k += step
-            S = DD(G, k, Ep)
-            t = avgIAC(G, S, Ep, I)
-            Tspread[k] = t
-            print k, step, Tspread[k]
-    else:
-        # find the value of k that spreads influence up to tsize nodes
-        while t < tsize:
-            k += step
-            S = DD(G, k, Ep)
-            t = avgIAC(G, S, Ep, I)
-            Tspread[k] = t
-            print k, step, Tspread[k]
 
-    if Tspread[k] < Tspread[k-step]:
-        k -= step
-        step = abs(step)
+    scores = dict()
+    t = dict()
+    for node in G:
+        scores[node] = sum(G[node][v]['weight'] for v in G[node])
+        t[node] = 0 # number of activated neighbors
 
-    # search precise boundary
-    stepk = step
-    while abs(stepk) != 1:
-        if Tspread[k] >= tsize:
-            stepk = -int(math.ceil(float(abs(stepk))/2))
-        else:
-            stepk = int(math.ceil(float(abs(stepk))/2))
-        k += stepk
+    return scores, t
 
-        if k not in Tspread:
-            lastS = DD(G, k, Ep)
-            Tspread[k] = avgIAC(G, lastS, Ep, I)
-            if Tspread[k] > tsize:
-                S = lastS
-        print k, stepk, Tspread[k]
-
-    return S, Tspread
+def updateScores(scores_copied, t, S, Ep):
+    maxk, maxv = max(scores_copied.iteritems(), key = operator.itemgetter(1))
+    S.append(maxk)
+    scores_copied.pop(maxk)
+    neighbors_weights = [G[u][v]['weight'] for v in G[u] if v not in S]
+    w_avg = sum(neighbors_weights)/len(neighbors_weights)
+    for v in G[maxk]:
+        if v not in S:
+            t[v] += G[maxk][v]['weight'] # increase number of selected neighbors
+            p = Ep[(maxk,v)]
+            scores_copied[v] -= 2*t[v] + (scores_copied[v] - t[v])*t[v]*p**w_avg # discount of degree
 
 if __name__ == '__main__':
     import time
@@ -88,12 +47,105 @@ if __name__ == '__main__':
     print 'Built graph G'
     print time.time() - start
 
+    fileno = "test"
     time2result = time.time()
-    tsize = 450
-    Ep = uniformEp(G, .01)
-    S, Tsize = binaryDegreeDiscount(G, tsize, Ep, step=100, I=1000)
-    print S
-    print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(S), tsize)
-    print 'Time to find result:', time.time() - time2result
+    tsize = 1000
+    prange = [.01, .02, .04, .08]
+    I = 1000
+    avgS = 0
+    M = 1
+    length_to_coverage = {0:0}
+    norm_parameters = dict()
+
+    for ep_it in range(M):
+        print 'Iteration ep_it:', ep_it
+        scores, t = getScores(G)
+        scores_copied = deepcopy(scores)
+        Coverages = {}
+        coverage = 0
+        S = []
+        pool = None
+        Ep = random_from_range(G, prange)
+        def mapAvgSize (S):
+            return avgIAC(G, S, Ep, I)
+        if pool == None:
+            pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+
+        print 'Selecting seed set S...'
+        time2select = time.time()
+        # add first node to S
+        updateScores(scores_copied, t, S, Ep)
+
+        # find Low and High
+        while coverage < tsize:
+            Low = len(S)
+            High = 2*Low
+            while len(S) < 2*Low:
+                updateScores(scores_copied, t, S, Ep)
+            T = pool.map(mapAvgSize, [S]*4)
+            coverage = sum(T)/len(T)
+            Coverages[len(S)] = coverage
+            print '|S|: %s --> %s' %(len(S), coverage)
+
+        # find boundary using binary search
+        lastS = S # S gives us solution for k = 1..len(S)
+        while Low + 1 != High:
+            time2double = time.time()
+            new_length = Low + (High - Low)//2
+            lastS = S[:new_length]
+
+            T = pool.map(mapAvgSize, [lastS]*4)
+            coverage = sum(T)/len(T)
+            Coverages[new_length] = coverage
+            print '|S|: %s --> %s' %(len(lastS), coverage)
+
+            if coverage < tsize:
+                Low = len(lastS)
+            else:
+                High = len(lastS)
+
+        # final check for k that reach coverage
+        if Coverages[Low] >= tsize:
+            finalS = S[:Low]
+        elif Coverages[High] >= tsize:
+            finalS = S[:High]
+
+        print 'Finished selecting seed set S: %s sec' %(time.time() - time2select)
+
+        print 'Coverage: ', Coverages[len(finalS)]
+        print finalS
+        print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), tsize)
+
+        # map length: [0,len(finalS)] to coverage
+        print 'Start estimating coverages...'
+        step = 5
+        for length in range(1, len(finalS)+1, step):
+            if length in Coverages:
+                norm_parameters[length] = norm_parameters.get(length,0) + 1
+                length_to_coverage[length] = length_to_coverage.get(length, 0) + Coverages[length]
+            else:
+                norm_parameters[length] = norm_parameters.get(length,0) + 1
+                # calculate coverage
+                T = pool.map(mapAvgSize, [finalS[:length]]*4)
+                coverage = sum(T)/len(T)
+                length_to_coverage[length] = length_to_coverage.get(length, 0) + coverage
+
+        # if we haven't added result for tsize, then add it
+        if (len(finalS) - 1)%step != 0:
+            norm_parameters[len(finalS)] = norm_parameters.get(len(finalS),0) + 1
+            length_to_coverage[len(finalS)] = length_to_coverage.get(len(finalS), 0) + Coverages[len(finalS)]
+
+        print 'Time to find result for %s iteration: %s sec' %(ep_it + 1, time.time() - time2result)
+        print '------------------------------------------------'
+
+    # normalizing coverages
+    for length in norm_parameters:
+        length_to_coverage[length] /= norm_parameters[length]
+
+    length_to_coverage = sorted(length_to_coverage.iteritems(), key = lambda (dk, dv): dk)
+
+    fp = open("plotDD.txt", "w+")
+    json.dump(length_to_coverage, fp)
+
     print 'Total time:', time.time() - start
     console = []
