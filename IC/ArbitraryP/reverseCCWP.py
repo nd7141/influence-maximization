@@ -2,8 +2,9 @@ from __future__ import division
 from copy import deepcopy
 import time, random, operator, os, json
 import networkx as nx
-import multiprocessing
-import runIAC
+import multiprocessing, numpy
+from runIAC import *
+import matplotlib.pyplot as plt
 
 def findCC(G, Ep):
     # remove blocked edges from graph G
@@ -42,7 +43,7 @@ def findL(CC, tsize):
             break
     return L, sortedCC
 
-def reverseCCWP(G, tsize, Ep, min_length, r):
+def reverseCCWP(G, tsize, Ep, min_length):
     '''
      Input:
      G -- undirected graph (nx.Graph)
@@ -101,132 +102,199 @@ if __name__ == "__main__":
     print 'Built graph G'
     print time.time() - start
 
-    fileno = 1
-    tsize = 450
-
-    # r = 2
-    Ep = runIAC.uniformEp(G, .01)
     R = 500
     I = 250
-    e_results = dict()
-    best_r = -1
+    tsize = 351
     best_S = []
     min_lenS = float("Inf")
     pool2algo = None
     pool2average = None
 
+    length_to_coverage = {0:0}
+    norm_parameters = dict()
+
+    # get propagation probabilities
+    Ep = dict()
+    with open("Ep_hep_random1.txt") as f:
+        for line in f:
+            data = line.split()
+            Ep[(int(data[0]), int(data[1]))] = float(data[2])
+
     time2preprocess = time.time()
     print 'Preprocessing to find minimal size of CC...'
     min_length = float("Inf")
-    for it in range(20):
+    # find min_length to select CC within
+    for length_it in range(5):
         CC = findCC(G, Ep)
         L, sortedCC = findL(CC, tsize)
         Llength = sortedCC[L-1][0]
         if Llength < min_length:
             min_length = Llength
     print 'Min |L|:', min_length
-    print 'Finished preprocessing in % sec' %(time.time() - time2preprocess)
+    print 'Finished preprocessing in %s sec' %(time.time() - time2preprocess)
 
-    for e in frange(1,1.5,.5):
-        r_results = dict()
-        for r in frange(1.,1.1,.2):
-            time2r = time.time()
-            print 'Finding solution for ratio e = %s, r = %s...' %(e,r)
+    def mapAvgSize (S):
+        return avgIAC(G, S, Ep, I)
+    def mapReverseCCWP (it):
+        return reverseCCWP(G, tsize, Ep, min_length)
+    if pool2algo == None:
+        pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+    if pool2average == None:
+        pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
 
-            def mapAvgSize (S):
-                return runIAC.avgIAC(G, S, Ep, I)
-            def mapReverseCCWP (it):
-                # print it
-                return reverseCCWP(G, tsize, Ep, min_length, r)
-            if pool2algo == None:
-                pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-            if pool2average == None:
-                pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+    time2map = time.time()
+    print 'Start mapping...'
+    result = pool2algo.map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
+    print 'Finished mapping in %s sec' %(time.time() - time2map)
 
-            time2map = time.time()
-            print 'Start mapping...'
-            result = pool2algo.map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
-            print 'Finished mapping in %s sec' %(time.time() - time2map)
+    time2reduce = time.time()
+    print 'Start reducing scores...'
+    scores = dict(zip(G.nodes(), [0]*len(G)))
+    maxL = -1
+    minL = float("Inf")
+    avgL = 0
+    for (Sc, L) in result:
+        avgL += L/len(result)
+        if L > maxL:
+            maxL = L
+        if L < minL:
+            minL = L
+        for (node, score) in Sc.iteritems():
+            scores[node] += score
+    print 'Finished reducing in %s sec' %(time.time() - time2reduce)
+    print 'avgL', avgL
+    print 'minL', minL
+    print 'maxL', maxL
 
-            time2reduce = time.time()
-            print 'Start reducing scores...'
-            scores = dict(zip(G.nodes(), [0]*len(G)))
-            maxL = -1
-            minL = float("Inf")
-            avgL = 0
-            for (Sc, L) in result:
-                avgL += L/len(result)
-                if L > maxL:
-                    maxL = L
-                if L < minL:
-                    minL = L
-                for (node, score) in Sc.iteritems():
-                    scores[node] += score
-            print 'Finished reducing in %s sec' %(time.time() - time2reduce)
-            print 'avgL', avgL
+    time2select = time.time()
+    print 'Start selecting seed set S...'
 
-            time2select = time.time()
-            print 'Start selecting seed set S...'
-            # select first top-L nodes with penalization
-            scores_copied = deepcopy(scores)
-            S = []
-            for i in range(int(1.3*maxL)): # change range limit to minL, maxL, avgL, 1, etc.
-                maxk, maxv = max(scores_copied.iteritems(), key = lambda (dk, dv): dv) # top node in the order
-                S.append(maxk)
-                scores_copied.pop(maxk)
-                for v in G[maxk]:
-                    if v not in S:
-                        p = Ep[(maxk,v)]
-                        penalty = (1-p)**(e*G[maxk][v]['weight'])
-                        scores_copied[v] *= penalty
-            with open('../reverseCCWP/reverseCCWP%s.txt' %fileno, 'w+') as f:
-                f.write('e: ' + str(e) + ' r:' + str(r) + os.linesep)
-            # calculate spread for top-L nodes
+    # select first top-L nodes with penalization
+    scores_copied = deepcopy(scores)
+    S = []
+    for i in range(int(minL)): # change range limit to minL, maxL, avgL, 1, etc.
+        maxk, maxv = max(scores_copied.iteritems(), key=lambda (dk, dv): dv) # top node in the order
+        S.append(maxk)
+        scores_copied.pop(maxk)
+        for v in G[maxk]:
+            if v not in S:
+                p = Ep[(maxk,v)]
+                penalty = (1-p)**(G[maxk][v]['weight'])
+                scores_copied[v] *= penalty
+    # calculate spread for top-L nodes
+    T = pool2average.map(mapAvgSize, [S]*4)
+    coverage = sum(T)/len(T)
+    print '|S| = %s --> %s' %(len(S), coverage)
+
+    # add new nodes using binary search
+    # first, search for 2 boundaries
+    Coverages = dict()
+    Low = len(S)
+    lastS = deepcopy(S)
+    Coverages[len(lastS)] = coverage
+    while coverage < tsize:
+        Low = len(lastS)
+        High = 2*Low
+        # select new nodes
+        while len(lastS) < 2*Low:
+            maxk, maxv = max(scores_copied.iteritems(), key = operator.itemgetter(1))
+            lastS.append(maxk)
+            scores_copied.pop(maxk)
+            for v in G[maxk]:
+                if v not in lastS:
+                    p = Ep[(maxk, v)]
+                    penalty = (1-p)**(G[maxk][v]['weight'])
+                    scores_copied[v] *= penalty
+        T = pool2average.map(mapAvgSize, [lastS]*4)
+        coverage = sum(T)/len(T)
+        print '|S| = %s --> %s' %(len(lastS), coverage)
+        Coverages[len(lastS)] = coverage
+
+    # second, search for minimal number of nodes
+    S = deepcopy(lastS)
+    step = len(S) - Low
+    while step > 1:
+        if coverage <= tsize:
+            # calculate new S
+            Low = len(S)
+            new_length = Low + (High - len(S))//2
+            S = lastS[:new_length]
+            # calculate coverage
             T = pool2average.map(mapAvgSize, [S]*4)
             coverage = sum(T)/len(T)
-            with open('../reverseCCWP/reverseCCWP%s.txt' %fileno, 'a+') as f:
-                f.write('|S| = %s --> %s' %(len(S), coverage) + os.linesep)
             print '|S| = %s --> %s' %(len(S), coverage)
-            # add new node by one penalizing scores at the same time
-            while coverage < tsize:
-                maxk, maxv = max(scores_copied.iteritems(), key = operator.itemgetter(1))
-                S.append(maxk)
-                scores_copied.pop(maxk)
-                T = pool2average.map(mapAvgSize, [S]*4)
-                coverage = sum(T)/len(T)
-                with open('../reverseCCWP/reverseCCWP%s.txt' %fileno, 'a+') as f:
-                    f.write('|S| = %s --> %s' %(len(S), coverage) + os.linesep)
-                print '|S| = %s --> %s' %(len(S), coverage)
-                for v in G[maxk]:
-                    if v not in S:
-                        p = Ep[(maxk, v)]
-                        penalty = (1-p)**(e*G[maxk][v]['weight'])
-                        scores_copied[v] *= penalty
-            print 'Finished selecting seed set S in %s sec' %(time.time() - time2select)
+            Coverages[len(S)] = coverage
+            # choose step
+            if coverage >= tsize:
+                step = min(len(S) - Low, High - len(S))
+            else:
+                step = max(len(S) - Low, High - len(S))
+        else:
+            # calculate new S
+            High = len(S)
+            new_length = High - (len(S) - Low)//2
+            S = lastS[:new_length]
+            # calculate coverage
+            T = pool2average.map(mapAvgSize, [S]*4)
+            coverage = sum(T)/len(T)
+            print '|S| = %s --> %s' %(len(S), coverage)
+            Coverages[len(S)] = coverage
+            # choose step
+            if coverage < tsize:
+                step = min(len(S) - Low, High - len(S))
+            else:
+                step = max(len(S) - Low, High - len(S))
 
-            print 'S:', S
-            print 'len(S):', len(S)
-            r_results[round(r,1)] = len(S)
-            # write results to file
-            print 'Writing result to file...'
-            with open('../reverseCCWP/reverseCCWP%s.txt' %fileno, 'a+') as f:
-                f.write('S: ' + json.dumps(S) + os.linesep)
-                f.write('|S|:' + str(len(S)))
-            fileno += 1
-            # compare to best found result so far
-            if len(S) < min_lenS:
-                min_lenS = len(S)
-                best_S = deepcopy(S)
-                best_er = (e,r)
-                print 'New best (e,r) = %s with len(S) = %s' %(best_er, min_lenS)
-            print 'Time for e = %s, r = %s: %s sec' %(e, r, time.time() - time2r)
-            print '--------------------------------------------------------------------------------'
-        e_results[e] = r_results
+    # additional check that we achieved coverage
+    if coverage <= tsize:
+        print 'Increase S by 1'
+        S = lastS[:new_length + 1]
+    finalS = deepcopy(S)
+    print finalS
+    print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), tsize)
+    print 'Finished selecting seed set S in %s sec' %(time.time() - time2select)
+    # with open("plotdata/timeReverseCCWPforReverse3.txt", "w+") as fp:
+    #     fp.write("%s" %(time.time() - time2select))
 
-    print 'Best S:', best_S
-    print 'len(S):', min_lenS
-    print 'Best er:', best_er
-    print 'e_results:', sorted(e_results.iteritems(), key = lambda (dk, dv): dk)
+    with open("plotdata/rawCCWPforDirect2.txt", "a+") as f:
+        json.dump({tsize: finalS}, f)
+        print >>f
+
+    with open("plotdata/rawCCWPTimeforDirect2.txt", "a+") as f:
+        json.dump({tsize: time.time() - start}, f)
+        print >>f
+
+    # # map length: [0,len(S)] to coverage
+    # print 'Start estimating coverages...'
+    # step = 5
+    # for length in range(1, len(finalS)+1, step):
+    #     if length in Coverages:
+    #         norm_parameters[length] = norm_parameters.get(length,0) + 1
+    #         length_to_coverage[length] = length_to_coverage.get(length, 0) + Coverages[length]
+    #         print '|S|: %s --> %s' %(length, Coverages[length])
+    #     else:
+    #         norm_parameters[length] = norm_parameters.get(length,0) + 1
+    #         # calculate coverage
+    #         T = pool2average.map(mapAvgSize, [finalS[:length]]*4)
+    #         coverage = sum(T)/len(T)
+    #         length_to_coverage[length] = length_to_coverage.get(length, 0) + coverage
+    #         print '|S|: %s --> %s' %(length, coverage)
+    #
+    # # if we haven't added result for tsize then add it
+    # if (len(finalS) - 1)%step != 0:
+    #     norm_parameters[len(finalS)] = norm_parameters.get(len(finalS),0) + 1
+    #     length_to_coverage[len(finalS)] = length_to_coverage.get(len(finalS), 0) + Coverages[len(finalS)]
+    #     print '|S|: %s --> %s' %(len(finalS), Coverages[len(finalS)])
+    #
+    # # normalizing coverages
+    # for length in norm_parameters:
+    #     length_to_coverage[length] /= norm_parameters[length]
+    #
+    # length_to_coverage = sorted(length_to_coverage.iteritems(), key = lambda (dk, dv): dk)
+    #
+    # with open("plotdata/plotReverseCCWPforReverse3.txt", "w+") as fp:
+    #     json.dump(length_to_coverage, fp)
+    #
     print 'Total time: %s sec' %(time.time() - start)
 
     console = []
