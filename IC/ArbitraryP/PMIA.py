@@ -3,14 +3,18 @@
 [1] -- Scalable Influence Maximization for Prevalent Viral Marketing in Large-Scale Social Networks.
 '''
 
-def computeAP(ap, v, S, PMIIA, Ep):
+from __future__ import division
+
+def updateAP(ap, v, S, PMIIA, Ep):
     ''' Assumption: PMIIA is a directed tree.
+    PMIIA is rooted at v.
     '''
     # Find leaves
     us = []
     for node in PMIIA:
         if not PMIIA.in_edges([node]):
             us.append(node)
+
     # Find ap moving from leaves to the root
     for u in us:
         if u in S:
@@ -20,14 +24,38 @@ def computeAP(ap, v, S, PMIIA, Ep):
         else:
             in_edges = PMIIA.in_edges([u], data=True)
             prod = 1
-            # TODO check if w,_ == w,u
             for w, _, edata in in_edges:
                 prod *= 1 - ap[(w, v)]*(1 - (1 - Ep[(w, u)])**edata["weight"])
             ap[(u, v)] = 1 - prod
 
         out_edges = PMIIA.out_edges([u])
-        #TODO check if u, out_node == out_edges
         us.extend([out_node for _, out_node in out_edges])
+
+def updateAlpha(alpha, v, S, PMIIA, Ep, ap):
+    ws = [v]
+    alpha[(v, v)] = 1
+    # moving from the root to leaves
+    for w in ws:
+        # add in-neighbors to ws
+        in_neighbors = PMIIA.in_egdes([w])
+        ws.extend([u for u, _ in in_neighbors])
+
+        # calculate alpha for in-neighbors
+        total_prod = 1
+        for u, _ in in_neighbors:
+            pp_up = (1 - Ep[(u, w)])**PMIIA[u][w]["weight"]
+            total_prod *= (1 - ap[(u, v)])*pp_up
+
+        for u, _ in in_neighbors:
+            if w in S:
+                alpha[(v, u)] = 0
+            else:
+                pp_u = (1 - Ep[(u,w)])**PMIIA[u][w]["weight"]
+                # exclude u node from in_neighbors
+                prod  = total_prod/((1 - ap[(u, v)])*pp_u)
+                alpha[(v, u)] = alpha[(v, w)]*pp_u*prod
+
+
 
 def PMIA(G, k, theta, Ep):
     # initialization
@@ -60,7 +88,7 @@ def PMIA(G, k, theta, Ep):
             if v != u:
                 PMIIA[v] = computePMIIA(v, theta, S)
                 updateAP(ap, v, S, PMIIA[v], Ep)
-                updateAlphas(alpha, v, S, PMIIA[v])
+                updateAlpha(alpha, v, S, PMIIA[v])
                 # add new incremental influence
                 for w in PMIIA[v]:
                     if w not in S:
