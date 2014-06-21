@@ -4,9 +4,11 @@
 '''
 
 from __future__ import division
+import networkx as nx
+import math
 
 def updateAP(ap, v, S, PMIIA, Ep):
-    ''' Assumption: PMIIA is a directed tree.
+    ''' Assumption: PMIIA is a directed tree, which is a subgraph of general G.
     PMIIA is rooted at v.
     '''
     # Find leaves
@@ -55,6 +57,43 @@ def updateAlpha(alpha, v, S, PMIIA, Ep, ap):
                 prod  = total_prod/((1 - ap[(u, v)])*pp_u)
                 alpha[(v, u)] = alpha[(v, w)]*pp_u*prod
 
+def computePMIOA(G, u, theta, S, Ep):
+    '''
+     Compute PMIOA -- subgraph of G that's rooted at u.
+     Uses Dijkstra's algorithm until length of path doesn't exceed -log(theta)
+     or no more nodes can be reached.
+    '''
+    # initialize PMIOA
+    PMIOA = nx.DiGraph()
+    PMIOA.add_node(u)
+
+    crossing_edges = set([in_edge for in_edge in G.in_edges([u]) if in_edge[0] not in S])
+    edge_weights = dict()
+    dist = {u: 0} # shortest paths from the root u
+
+    # grow PMIOA
+    while crossing_edges:
+        # Dijkstra's greedy criteria
+        min_dist = float("Inf")
+        for edge in crossing_edges:
+            if edge not in edge_weights:
+                edge_weights[edge] = -math.log(1 - (1 - Ep[edge])**G[edge[0]][edge[1]]["weight"])
+            edge_weight = edge_weights[edge]
+            if dist[edge[1]] + edge_weight < min_dist:
+                min_dist = dist[edge[1]] + edge_weight
+                min_edge = edge
+        # check stopping criteria
+        print min_edge, ':', min_dist, '-->', -math.log(theta)
+        if min_dist < -math.log(theta):
+            dist[min_edge[0]] = min_dist
+            PMIOA.add_edge(min_edge[0], min_edge[1], {"weight": G[min_edge[0]][min_edge[1]]["weight"]})
+            # update crossing edges
+            crossing_edges.difference_update(G.out_edges(min_edge[0]))
+            crossing_edges.update([in_edge for in_edge in G.in_edges(min_edge[0])
+                                   if (in_edge[0] not in PMIOA) and (in_edge[0] not in S)])
+        else:
+            break
+    return PMIOA
 
 
 def PMIA(G, k, theta, Ep):
