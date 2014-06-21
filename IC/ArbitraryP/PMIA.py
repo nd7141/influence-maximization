@@ -67,7 +67,7 @@ def computePMIOA(G, u, theta, S, Ep):
     PMIOA = nx.DiGraph()
     PMIOA.add_node(u)
 
-    crossing_edges = set([in_edge for in_edge in G.in_edges([u]) if in_edge[0] not in S])
+    crossing_edges = set([out_edge for out_edge in G.out_edges([u]) if out_edge[0] not in S])
     edge_weights = dict()
     dist = {u: 0} # shortest paths from the root u
 
@@ -75,26 +75,29 @@ def computePMIOA(G, u, theta, S, Ep):
     while crossing_edges:
         # Dijkstra's greedy criteria
         min_dist = float("Inf")
-        for edge in crossing_edges:
+        sorted_crossing_edges = sorted(crossing_edges) # to break ties consistently
+        for edge in sorted_crossing_edges:
             if edge not in edge_weights:
                 edge_weights[edge] = -math.log(1 - (1 - Ep[edge])**G[edge[0]][edge[1]]["weight"])
             edge_weight = edge_weights[edge]
-            if dist[edge[1]] + edge_weight < min_dist:
-                min_dist = dist[edge[1]] + edge_weight
+            if dist[edge[0]] + edge_weight < min_dist:
+                min_dist = dist[edge[0]] + edge_weight
                 min_edge = edge
         # check stopping criteria
         print min_edge, ':', min_dist, '-->', -math.log(theta)
         if min_dist < -math.log(theta):
-            dist[min_edge[0]] = min_dist
+            dist[min_edge[1]] = min_dist
             PMIOA.add_edge(min_edge[0], min_edge[1], {"weight": G[min_edge[0]][min_edge[1]]["weight"]})
             # update crossing edges
-            crossing_edges.difference_update(G.out_edges(min_edge[0]))
-            crossing_edges.update([in_edge for in_edge in G.in_edges(min_edge[0])
-                                   if (in_edge[0] not in PMIOA) and (in_edge[0] not in S)])
+            crossing_edges.difference_update(G.in_edges(min_edge[1]))
+            crossing_edges.update([out_edge for out_edge in G.out_edges(min_edge[1])
+                                   if (out_edge[1] not in PMIOA) and (out_edge[1] not in S)])
         else:
             break
     return PMIOA
 
+def computePMIIA(v, theta, S):
+    pass
 
 def PMIA(G, k, theta, Ep):
     # initialization
