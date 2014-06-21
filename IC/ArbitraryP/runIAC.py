@@ -11,10 +11,15 @@ def uniformEp(G, p = .01):
     '''
     Every edge has the same probability p.
     '''
-    Ep = dict()
-    for v1,v2 in G.edges():
-        Ep[(v1,v2)] = p
-        Ep[(v2,v1)] = p
+    if type(G) == type(nx.DiGraph()):
+        Ep = dict(zip(G.edges(), [p]*len(G.edges())))
+    elif type(G) == type(nx.Graph()):
+        Ep = dict()
+        for (u, v) in G.edges():
+            Ep[(u, v)] = p
+            Ep[(u, v)] = p
+    else:
+        raise ValueError, "Provide either nx.Graph or nx.DiGraph object"
     return Ep
 
 def randomEp(G, maxp):
@@ -23,10 +28,17 @@ def randomEp(G, maxp):
     '''
     assert maxp <= 1, "Maximum probability cannot exceed 1."
     Ep = dict()
-    for v1,v2 in G.edges():
-        p = random.uniform(0, maxp)
-        Ep[(v1,v2)] = p
-        Ep[(v2,v1)] = p
+    if type(G) == type(nx.DiGraph()):
+        for v1,v2 in G.edges():
+            p = random.uniform(0, maxp)
+            Ep[(v1,v2)] = p
+    elif type(G) == type(nx.Graph()):
+        for v1,v2 in G.edges():
+            p = random.uniform(0, maxp)
+            Ep[(v1,v2)] = p
+            Ep[(v2,v1)] = p
+    else:
+        raise ValueError, "Provide either nx.Graph or nx.DiGraph object"
     return Ep
 
 def random_from_range (G, prange):
@@ -37,10 +49,15 @@ def random_from_range (G, prange):
         if p > 1:
             raise ValueError, "Propagation probability inside range should be <= 1"
     Ep = dict()
-    for v1,v2 in G.edges():
-        p = random.choice(prange)
-        Ep[(v1,v2)] = p
-        Ep[(v2,v1)] = p
+    if type(G) == type(nx.DiGraph()):
+        for v1,v2 in G.edges():
+            p = random.choice(prange)
+            Ep[(v1,v2)] = p
+    elif type(G) == type(nx.DiGraph()):
+        for v1,v2 in G.edges():
+            p = random.choice(prange)
+            Ep[(v1,v2)] = p
+            Ep[(v2,v1)] = p
     return Ep
 
 def runIAC (G, S, Ep):
@@ -174,8 +191,8 @@ if __name__ == '__main__':
     start = time.time()
 
     # read in graph
-    # G = nx.Graph()
-    # with open('../../graphdata/hep.txt') as f:
+    # G = nx.DiGraph()
+    # with open('../../graphdata/epi.txt') as f:
     #     n, m = f.readline().split()
     #     for line in f:
     #         try:
@@ -184,48 +201,51 @@ if __name__ == '__main__':
     #             continue
     #         try:
     #             G[u][v]['weight'] += 1
+    #             G[v][u]["weight"] += 1
     #         except:
-    #             G.add_edge(u,v, weight=1)
-    #         # G.add_edge(u, v, weight=1)
+    #             G.add_edge(u, v, weight=1)
+    #             G.add_edge(v, u, weight=1)
     # print 'Built graph G'
     # print time.time() - start
     #
-    # nx.write_gpickle(G, "../../graphs/hep.gpickle")
-
+    #
+    # nx.write_gpickle(G, "../../graphs/epi.gpickle")
+    # print 'Wrote graph G'
+    # print time.time() - start
     G = nx.read_gpickle("../../graphs/epi.gpickle")
     print 'Read graph G'
     print time.time() - start
 
-    random.seed(1)
-
-    time2probability = time.time()
-    prange = [.01, .02, .04, .08]
-    Ep = random_from_range(G, prange)
-    print 'Built probabilities Ep'
-    print time.time() - time2probability
-
-    with open("Ep_epi_range1.txt", "w+") as f:
-        for key, value in Ep.iteritems():
-            f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
-
-
-    time2probability = time.time()
-    Ep = randomEp(G, .1)
-    print 'Built probabilities Ep'
-    print time.time() - time2probability
-
-    with open("Ep_epi_random1.txt", "w+") as f:
-        for key, value in Ep.iteritems():
-            f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
-
-    time2probability = time.time()
-    Ep = uniformEp(G, .01)
-    print 'Built probabilities Ep'
-    print time.time() - time2probability
-
-    with open("Ep_epi_uniform1.txt", "w+") as f:
-        for key, value in Ep.iteritems():
-            f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
+    # random.seed(1)
+    #
+    # time2probability = time.time()
+    # prange = [.01, .02, .04, .08]
+    # Ep = random_from_range(G, prange)
+    # print 'Built probabilities Ep'
+    # print time.time() - time2probability
+    #
+    # with open("Ep_epi_range1.txt", "w+") as f:
+    #     for key, value in Ep.iteritems():
+    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
+    #
+    #
+    # time2probability = time.time()
+    # Ep = randomEp(G, .1)
+    # print 'Built probabilities Ep'
+    # print time.time() - time2probability
+    #
+    # with open("Ep_epi_random1.txt", "w+") as f:
+    #     for key, value in Ep.iteritems():
+    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
+    #
+    # time2probability = time.time()
+    # Ep = uniformEp(G, .01)
+    # print 'Built probabilities Ep'
+    # print time.time() - time2probability
+    #
+    # with open("Ep_epi_uniform1.txt", "w+") as f:
+    #     for key, value in Ep.iteritems():
+    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
 
     # import json
     # coverage2length = [[0,0]]
