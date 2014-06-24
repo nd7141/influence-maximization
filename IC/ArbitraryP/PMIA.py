@@ -6,11 +6,14 @@
 from __future__ import division
 import networkx as nx
 import math
+from copy import deepcopy
 
-def updateAP(ap, v, S, PMIIAv, PMIIA_MIPv, Ep):
+def updateAP(ap, S, PMIIAv, PMIIA_MIPv, Ep):
     ''' Assumption: PMIIAv is a directed tree, which is a subgraph of general G.
+    PMIIA_MIPv -- dictionary of MIP from nodes in PMIIA
     PMIIAv is rooted at v.
     '''
+    # going from leaves to root
     sorted_MIPs = sorted(PMIIA_MIPv.iteritems(), key = lambda (_, MIP): len(MIP), reverse = True)
     for u, _ in sorted_MIPs:
         if u in S:
@@ -25,32 +28,26 @@ def updateAP(ap, v, S, PMIIAv, PMIIA_MIPv, Ep):
                 prod *= 1 - ap[(w, PMIIAv)]*p
             ap[(u, PMIIAv)] = 1 - prod
 
-def updateAlpha(alpha, v, S, PMIIAv, Ep, ap):
-    ws = [v]
-    alpha[(v, v)] = 1
-    # moving from the root to leaves
-    for w in ws:
-        # add in-neighbors to ws
-        in_neighbors = PMIIAv.in_edges([w])
-        ws.extend([u for u, _ in in_neighbors if u not in ws])
-
-        # calculate alpha for in-neighbors
-        total_prod = 1
-        for u, _ in in_neighbors:
-            pp_up = 1 - (1 - Ep[(u, w)])**PMIIAv[u][w]["weight"]
-            total_prod *= (1 - ap[(u, PMIIAv)])*pp_up
-
-        for u, _ in in_neighbors:
+def updateAlpha(alpha, v, S, PMIIAv, PMIIA_MIPv, Ep, ap):
+    # going from root to leaves
+    sorted_MIPs =  sorted(PMIIA_MIPv.iteritems(), key = lambda (_, MIP): len(MIP))
+    for u, mip in sorted_MIPs:
+        if u == v:
+            alpha[(PMIIAv, u)] = 1
+        else:
+            out_edges = PMIIAv.out_edges([u])
+            assert len(out_edges) == 1, "node u=%s must have exactly one neighbor, got %s instead" %(u, len(out_edges))
+            w = out_edges[0][1]
             if w in S:
-                alpha[(v, u)] = 0
+                alpha[(PMIIAv, u)] = 0
             else:
-                pp_u = 1 - (1 - Ep[(u,w)])**PMIIAv[u][w]["weight"]
+                in_edges = PMIIAv.in_edges([w], data=True)
                 prod = 1
-                for up, _ in in_neighbors:
+                for up, _, edata in in_edges:
                     if up != u:
-                        pp_up = 1 - (1 - Ep[(up, w)])**PMIIAv[up][w]["weight"]
-                        prod *= (1 - ap[(up, PMIIAv)])*pp_up
-                alpha[(v, u)] = alpha[(v, w)]*pp_u*prod
+                        pp_upw = 1 - (1 - Ep[(up, w)])**edata["weight"]
+                        prod *= (1 - ap[(up, PMIIAv)]*pp_upw)
+                alpha[(PMIIAv, u)] = alpha[(PMIIAv, w)]*(1 - (1 - Ep[(u,w)])**PMIIAv[u][w]["weight"])*prod
 
 def computePMIOA(G, u, theta, S, Ep):
     '''
@@ -63,7 +60,7 @@ def computePMIOA(G, u, theta, S, Ep):
     PMIOA.add_node(u)
     PMIOA_MIP = {u: [u]} # MIP(u,v) for v in PMIOA
 
-    crossing_edges = set([out_edge for out_edge in G.out_edges([u]) if out_edge[0] not in S])
+    crossing_edges = set([out_edge for out_edge in G.out_edges([u]) if out_edge[1] not in S + [u]])
     edge_weights = dict()
     dist = {u: 0} # shortest paths from the root u
 
@@ -109,7 +106,7 @@ def computePMIIA(G, ISv, v, theta, S, Ep):
     PMIIA.add_node(v)
     PMIIA_MIP = {v: [v]} # MIP(u,v) for u in PMIIA
 
-    crossing_edges = set([in_edge for in_edge in G.in_edges([v]) if in_edge[0] not in ISv])
+    crossing_edges = set([in_edge for in_edge in G.in_edges([v]) if in_edge[0] not in ISv + [v]])
     edge_weights = dict()
     dist = {v: 0} # shortest paths from the root u
 
@@ -158,23 +155,23 @@ def PMIA(G, k, theta, Ep):
         PMIIA[v], PMIIA_MIP[v] = computePMIIA(G, IS[v], v, theta, S, Ep)
         for u in PMIIA[v]:
             ap[(u, PMIIA[v])] = 0 # ap of u node in PMIIA[v]
-        updateAlpha(alpha, v, S, PMIIA[v], Ep, ap)
+        updateAlpha(alpha, v, S, PMIIA[v], PMIIA_MIP[v], Ep, ap)
         for u in PMIIA[v]:
-            IncInf[u] += alpha[(v,u)]*(1 - ap[(u, PMIIA[v])])
-            # print u, "-->", IncInf[u]
+            IncInf[u] += alpha[(PMIIA[v], u)]*(1 - ap[(u, PMIIA[v])])
     print 'Finished initialization'
     print time.time() - start
 
     # main loop
     for i in range(k):
         u, _ = max(IncInf.iteritems(), key = lambda (dk, dv): dv)
+        print i+1, "node:", u, "-->", IncInf[u]
         IncInf.pop(u) # exclude node u for next iterations
         PMIOA[u], PMIOA_MIP[u] = computePMIOA(G, u, theta, S, Ep)
-        # print PMIOA_MIP[u]
         for v in PMIOA[u]:
             for w in PMIIA[v]:
                 if w not in S + [u]:
-                    IncInf[w] -= alpha[(v,w)]*(1 - ap[(w, PMIIA[v])])
+                    IncInf[w] -= alpha[(PMIIA[v],w)]*(1 - ap[(w, PMIIA[v])])
+
         updateIS(IS, S, u, PMIOA_MIP, PMIIA_MIP)
 
         S.append(u)
@@ -182,11 +179,11 @@ def PMIA(G, k, theta, Ep):
         for v in PMIOA[u]:
             if v != u:
                 PMIIA[v], PMIIA_MIP[v] = computePMIIA(G, IS[v], v, theta, S, Ep)
-                updateAP(ap, v, S, PMIIA[v], PMIIA_MIP[v], Ep)
-                updateAlpha(alpha, v, S, PMIIA[v], Ep, ap)
+                updateAP(ap, S, PMIIA[v], PMIIA_MIP[v], Ep)
+                updateAlpha(alpha, v, S, PMIIA[v], PMIIA_MIP[v], Ep, ap)
                 # add new incremental influence
                 for w in PMIIA[v]:
                     if w not in S:
-                        IncInf[w] += alpha[(v, w)]*(1 - ap[(w, PMIIA[v])])
+                        IncInf[w] += alpha[(PMIIA[v], w)]*(1 - ap[(w, PMIIA[v])])
 
     return S
