@@ -96,6 +96,27 @@ def plotCCsSizeDistribution (histogram, bluedots, T, filename="plots/CCs_sizes.p
 
     # plt.show()
 
+def plotLvsT (Lrange, Trange, TotalCCs, filename = "plots/LvsT_.png",
+              model="Model"):
+
+    x = Trange
+    y = Lrange
+
+    fig = plt.figure()
+    ax = fig.gca()
+
+    plt.plot(x, y, 'r' + '--', linewidth=2)
+    p, = plt.plot(x, y, 'r' + 'o', markersize=6)
+
+    plt.xlabel('T')
+    plt.ylabel('L')
+
+    fig.suptitle('HepNEPT -- %s' %(model))
+    plt.title('Total CCs: %s' %TotalCCs)
+
+    fig.savefig(filename, dpi=fig.dpi)
+    # plt.show()
+
 
 if __name__ == "__main__":
     # print "Plotting results..."
@@ -110,16 +131,25 @@ if __name__ == "__main__":
     #
     # visualiseResults([CCWPx, GDDx, PMIAx], [CCWPy, GDDy, PMIAy], "plots/direct6.png")
 
-    print "Plotting CCs sizes distribution..."
-    with open("plotdata/CCs_sizes_Multivalency1.txt") as fp:
-        bluedots = int(fp.readline())
-        T = int(fp.readline())
-        L = int(fp.readline())
-        TotalCCs = int(fp.readline())
-        histogram = json.loads(fp.readline())
+    # print "Plotting CCs sizes distribution..."
+    # with open("plotdata/CCs_sizes_Categories1.txt") as fp:
+    #     bluedots = int(fp.readline())
+    #     T = int(fp.readline())
+    #     L = int(fp.readline())
+    #     TotalCCs = int(fp.readline())
+    #     histogram = json.loads(fp.readline())
+    #
+    # model = "Categories"
+    # plotCCsSizeDistribution(histogram, bluedots, T, "plots/CCs_sizes_categories.png", L, TotalCCs, model, xlog=False)
 
-    model = "MultiValency"
-    plotCCsSizeDistribution(histogram, bluedots, T, "plots/CCs_sizes_multivalency_log.png", L, TotalCCs, model, xlog=True)
+    print "Plotting L vs T..."
+    model = "Random"
+    with open("plotdata/LvsT_%s.txt" %model) as fp:
+        Trange = json.loads(fp.readline())
+        Lrange = json.loads(fp.readline())
+        TotalCCs = int(fp.readline())
+
+    plotLvsT(Lrange, Trange, TotalCCs, "plots/LvsT_%s.png" %model, model)
 
     # print "Plotting timing..."
     # CCWP_k = []

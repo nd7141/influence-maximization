@@ -155,7 +155,7 @@ def findCC(G, Ep):
     E.remove_edges_from(edge_rem)
 
     # initialize CC
-    CC = dict() # each component is reflection os the number of a component to its members
+    CC = dict() # number of a component to its members
     explored = dict(zip(E.nodes(), [False]*len(E)))
     c = 0
     # perform BFS to discover CC
@@ -202,6 +202,14 @@ def findCCs_size_distribution(G, Ep, T):
 
     return histogram, bluedots, L, len(CCs)
 
+def findLrangeforTrange (G, Ep, Trange):
+    Lrange = []
+    CCs = findCC(G, Ep)
+    for T in Trange:
+        L, _ = findL(CCs, T)
+        Lrange.append(L)
+    return Lrange, len(CCs)
+
 if __name__ == '__main__':
     import time
     start = time.time()
@@ -232,14 +240,17 @@ if __name__ == '__main__':
     print 'Read graph G'
     print time.time() - start
 
+    DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
+
     random.seed(1)
 
-    time2probability = time.time()
-    prange = [.01, .02, .04, .08]
-    Ep = random_from_range(G, prange)
-    print 'Built probabilities Ep'
-    print time.time() - time2probability
-
+    # time2probability = time.time()
+    # prange = [.01, .02, .04, .08]
+    # Ep = random_from_range(G, prange)
+    # print 'Built probabilities Ep'
+    # print time.time() - time2probability
+    # model = "MultiValency"
+    #
     # write CCs sizes distrbution to file
     # T = 500
     # histogram, bluedots, L, TotalCCs = findCCs_size_distribution(G, Ep, T)
@@ -249,6 +260,18 @@ if __name__ == '__main__':
     #     print >>fp, L
     #     print >>fp, TotalCCs
     #     print >>fp, json.dumps(histogram)
+    #
+    # write TvsL to file
+    # Trange = range(1, 3001, 50)
+    # Lrange, TotalCCs = findLrangeforTrange(G, Ep, Trange)
+    # with open("plotdata/LvsT_%s.txt" %model, "w+") as fp:
+    #     print >>fp, json.dumps(Trange)
+    #     print >>fp, json.dumps(Lrange)
+    #     print >>fp, TotalCCs
+    # with open(DROPBOX + "plotdata/LvsT_%s.txt" %model, "w+") as fp:
+    #     print >>fp, json.dumps(Trange)
+    #     print >>fp, json.dumps(Lrange)
+    #     print >>fp, TotalCCs
 
     # with open("Ep_hep_range1.txt", "w+") as f:
     #     for key, value in Ep.iteritems():
@@ -259,40 +282,24 @@ if __name__ == '__main__':
     # Ep = degree_categories(G, prange)
     # print 'Built probabilities Ep'
     # print time.time() - time2probability
-    #
-    # with open("Ep_hep_degree1.txt", "w+") as f:
-    #     for key, value in Ep.iteritems():
-    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
+    # model = "Categories"
     #
     # time2probability = time.time()
     # Ep = randomEp(G, .1)
     # print 'Built probabilities Ep'
     # print time.time() - time2probability
-    # 
-    # findCCs_size_distribution(G, Ep, 900, "plots/CCs_sizes_random_log.png")
-    #
-    # with open("Ep_hep_random3.txt", "w+") as f:
-    #     for key, value in Ep.iteritems():
-    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
+    # model = "Random"
     #
     # time2probability = time.time()
     # Ep = uniformEp(G, .01)
     # print 'Built probabilities Ep'
     # print time.time() - time2probability
     #
-    # with open("Ep_hep_uniform1.txt", "w+") as f:
-    #     for key, value in Ep.iteritems():
-    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
-
     # time2probability = time.time()
     # Ep = weightedEp(G)
     # print 'Built probabilities Ep'
     # print time.time() - time2probability
-
-    # with open("Ep_hep_weighted1.txt", "w+") as f:
-    #     for key, value in Ep.iteritems():
-    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
-
+    #
     # import json
     # coverage2length = [[0,0]]
     # with open("plotdata/rawCCWPforDirect2.txt") as f:
