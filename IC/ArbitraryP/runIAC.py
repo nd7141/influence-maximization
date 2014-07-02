@@ -4,8 +4,9 @@ Independent Arbitrary Cascade (IAC) is a independent cascade model with arbitrar
 '''
 from __future__ import division
 from copy import deepcopy
-import random, multiprocessing, os
+import random, multiprocessing, os, math, json
 import networkx as nx
+import matplotlib.pylab as plt
 
 def uniformEp(G, p = .01):
     '''
@@ -58,6 +59,51 @@ def random_from_range (G, prange):
             p = random.choice(prange)
             Ep[(v1,v2)] = p
             Ep[(v2,v1)] = p
+    return Ep
+
+# http://stackoverflow.com/questions/312443/how-do-you-split-a-list-into-evenly-sized-chunks-in-python
+def chunks(lst, n):
+    size = int(math.ceil(float(len(lst))/n))
+    return [lst[i:i + size] for i in range(0, len(lst), size)]
+
+def degree_categories(G, prange):
+    '''
+    Every edge has propagation probability chosen from prange based on degree of a node.
+    '''
+    for p in prange:
+        if p > 1:
+            raise ValueError, "Propagation probability inside range should be <= 1"
+    Ep = dict()
+
+    d = {v: sum([G[v][u]["weight"] for u in G[v]]) for v in G}
+    sorted_d = chunks(sorted(d.iteritems(), key = lambda (_, degree): degree), len(prange))
+    sorted_p = sorted(prange)
+    categories = zip(sorted_p, sorted_d)
+    dp = dict()
+    for c in categories:
+        p, nodes = c
+        for (v, _) in nodes:
+            dp[v] = p
+
+    if type(G) == type(nx.DiGraph()):
+        for v1,v2 in G.edges():
+            Ep[(v1,v2)] = dp[v1]
+    elif type(G) == type(nx.DiGraph()):
+        for v1,v2 in G.edges():
+            Ep[(v1,v2)] = dp[v2]
+            Ep[(v2,v1)] = dp[v1]
+    return Ep
+
+def weightedEp(G):
+    '''
+    Every incoming edge of v has propagation probability equals to 1/deg(v)
+    '''
+    Ep = dict()
+    for v in G:
+        in_edges = G.in_edges([v])
+        degree = sum([G[u][v]["weight"] for (u, _) in in_edges])
+        for edge in in_edges:
+            Ep[edge] = 1.0/degree
     return Ep
 
 def runIAC (G, S, Ep):
@@ -126,65 +172,35 @@ def findCC(G, Ep):
                     component.extend(E[neighbor].keys())
     return CC
 
-def getScores(G, k, Ep):
-    '''
-     Input:
-     G -- undirected graph (nx.Graph)
-     k -- number of nodes in seed set (int)
-     p -- propagation probability among all edges (int)
-     Output:
-     scores -- scores of nodes according to some weight function (dict)
-    '''
-    scores = dict(zip(G.nodes(), [0]*len(G))) # initialize scores
+def findL(CCs, T):
+    # find top components that can reach T activated nodes
+    sortedCCs = sorted([(len(dv), dk) for (dk, dv) in CCs.iteritems()], reverse=True)
+    cumsum = 0 # sum of top components
+    L = 0 # current number of CC that achieve T
+    # find L first
+    for length, numberCC in sortedCCs:
+        L += 1
+        cumsum += length
+        if cumsum >= T:
+            break
+    return L, sortedCCs
 
-    CC = findCC(G, Ep)
+def findCCs_size_distribution(G, Ep, T):
+    CCs = findCC(G, Ep)
+    L, sortedCCs = findL(CCs, T)
+    from itertools import groupby
+    histogram = [(s, len(list(group))) for (s, group) in groupby(sortedCCs, key = lambda (size, _): size)]
 
-    # find ties for components of rank k and add them all as qualified
-    sortedCC = sorted([(len(dv), dk) for (dk, dv) in CC.iteritems()], reverse=True)
-    topCCnumbers = sortedCC[:k] # CCs we assign scores to
-    L = sum([l for (l,_) in topCCnumbers])
+    bluedots = 1
+    acc_size = 0
+    for (size, number) in histogram:
+        acc_size += size
+        if acc_size < T:
+            bluedots += 1
+        else:
+            break
 
-    increment = 0
-    # add ties of rank k (if len of kth CC == 1 then add all CCs)
-    while k+increment < len(sortedCC) and sortedCC[k + increment][0] == sortedCC[k-1][0]:
-        topCCnumbers.append(sortedCC[k + increment])
-        increment += 1
-
-    # assign scores to nodes in top Connected Components
-    # prev_length  = topCCnumbers[0][0]
-    # rank = 1
-    for length, numberCC in topCCnumbers:
-        # if length != prev_length:
-        #     prev_length = length
-        #     rank += 1
-        # weighted_score = length
-        weighted_score = 1.0/length
-        # weighted_score = 1
-        for node in CC[numberCC]:
-            scores[node] += weighted_score
-    return scores
-
-def CCWP(G, k, Ep, R):
-    def map_CCWP(it):
-        return getScores(G, k, Ep)
-    Scores = map(map_CCWP, range(R))
-
-    scores = {v: sum([s[v] for s in Scores]) for v in G}
-    scores_copied = deepcopy(scores)
-    S = []
-    # penalization phase
-    for it in range(k):
-        maxk, maxv = max(scores_copied.iteritems(), key = lambda (dk, dv): dv)
-        # print maxv,
-        S.append(maxk)
-        scores_copied.pop(maxk) # remove top element from dict
-        for v in G[maxk]:
-            if v not in S:
-                # weight = scores_copied[v]/maxv
-                # print weight,
-                penalty = (1-Ep[(maxk, v)])**(G[maxk][v]['weight'])
-                scores_copied[v] = penalty*scores_copied[v]
-    return S
+    return histogram, bluedots, L, len(CCs)
 
 if __name__ == '__main__':
     import time
@@ -192,7 +208,7 @@ if __name__ == '__main__':
 
     # read in graph
     # G = nx.DiGraph()
-    # with open('../../graphdata/epi.txt') as f:
+    # with open('../../graphdata/hep.txt') as f:
     #     n, m = f.readline().split()
     #     for line in f:
     #         try:
@@ -200,7 +216,7 @@ if __name__ == '__main__':
     #         except ValueError:
     #             continue
     #         try:
-    #             G[u][v]['weight'] += 1
+    #             G[u][v]["weight"] += 1
     #             G[v][u]["weight"] += 1
     #         except:
     #             G.add_edge(u, v, weight=1)
@@ -209,32 +225,53 @@ if __name__ == '__main__':
     # print time.time() - start
     #
     #
-    # nx.write_gpickle(G, "../../graphs/epi.gpickle")
+    # nx.write_gpickle(G, "../../graphs/hep.gpickle")
     # print 'Wrote graph G'
     # print time.time() - start
-    G = nx.read_gpickle("../../graphs/epi.gpickle")
+    G = nx.read_gpickle("../../graphs/hep.gpickle")
     print 'Read graph G'
     print time.time() - start
 
-    # random.seed(1)
-    #
-    # time2probability = time.time()
-    # prange = [.01, .02, .04, .08]
-    # Ep = random_from_range(G, prange)
-    # print 'Built probabilities Ep'
-    # print time.time() - time2probability
-    #
-    # with open("Ep_epi_range1.txt", "w+") as f:
+    random.seed(1)
+
+    time2probability = time.time()
+    prange = [.01, .02, .04, .08]
+    Ep = random_from_range(G, prange)
+    print 'Built probabilities Ep'
+    print time.time() - time2probability
+
+    # write CCs sizes distrbution to file
+    # T = 500
+    # histogram, bluedots, L, TotalCCs = findCCs_size_distribution(G, Ep, T)
+    # with open("plotdata/CCs_sizes_Multivalency1.txt", "w+") as fp:
+    #     print >>fp, bluedots
+    #     print >>fp, T
+    #     print >>fp, L
+    #     print >>fp, TotalCCs
+    #     print >>fp, json.dumps(histogram)
+
+    # with open("Ep_hep_range1.txt", "w+") as f:
     #     for key, value in Ep.iteritems():
     #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
     #
+    # time2probability = time.time()
+    # prange = [.01, .02, .04, .08]
+    # Ep = degree_categories(G, prange)
+    # print 'Built probabilities Ep'
+    # print time.time() - time2probability
+    #
+    # with open("Ep_hep_degree1.txt", "w+") as f:
+    #     for key, value in Ep.iteritems():
+    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
     #
     # time2probability = time.time()
     # Ep = randomEp(G, .1)
     # print 'Built probabilities Ep'
     # print time.time() - time2probability
+    # 
+    # findCCs_size_distribution(G, Ep, 900, "plots/CCs_sizes_random_log.png")
     #
-    # with open("Ep_epi_random1.txt", "w+") as f:
+    # with open("Ep_hep_random3.txt", "w+") as f:
     #     for key, value in Ep.iteritems():
     #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
     #
@@ -243,7 +280,16 @@ if __name__ == '__main__':
     # print 'Built probabilities Ep'
     # print time.time() - time2probability
     #
-    # with open("Ep_epi_uniform1.txt", "w+") as f:
+    # with open("Ep_hep_uniform1.txt", "w+") as f:
+    #     for key, value in Ep.iteritems():
+    #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
+
+    # time2probability = time.time()
+    # Ep = weightedEp(G)
+    # print 'Built probabilities Ep'
+    # print time.time() - time2probability
+
+    # with open("Ep_hep_weighted1.txt", "w+") as f:
     #     for key, value in Ep.iteritems():
     #         f.write(str(key[0]) + " " + str(key[1]) + " " + str(value) + os.linesep)
 
@@ -258,6 +304,5 @@ if __name__ == '__main__':
     #
     # with open("plotdata/plotReverseCCWPforReverse2_v2.txt", "w+") as f:
     #     json.dump(coverage2length, f)
-
 
     console = []
