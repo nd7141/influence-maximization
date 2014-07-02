@@ -7,6 +7,8 @@ from __future__ import division
 import networkx as nx
 import math
 from copy import deepcopy
+from runIAC import avgIAC
+import multiprocessing, json
 
 def updateAP(ap, S, PMIIAv, PMIIA_MIPv, Ep):
     ''' Assumption: PMIIAv is a directed tree, which is a subgraph of general G.
@@ -77,7 +79,6 @@ def computePMIOA(G, u, theta, S, Ep):
                 min_dist = dist[edge[0]] + edge_weight
                 min_edge = edge
         # check stopping criteria
-        # print min_edge, ':', min_dist, '-->', -math.log(theta)
         if min_dist < -math.log(theta):
             dist[min_edge[1]] = min_dist
             PMIOA.add_edge(min_edge[0], min_edge[1], {"weight": G[min_edge[0]][min_edge[1]]["weight"]})
@@ -90,7 +91,6 @@ def computePMIOA(G, u, theta, S, Ep):
             break
     return PMIOA, PMIOA_MIP
 
-# TODO closely look at how it changes IS
 def updateIS(IS, S, u, PMIOA, PMIIA):
     for v in PMIOA[u]:
         for si in S:
@@ -164,7 +164,7 @@ def PMIA(G, k, theta, Ep):
     # main loop
     for i in range(k):
         u, _ = max(IncInf.iteritems(), key = lambda (dk, dv): dv)
-        print i+1, "node:", u, "-->", IncInf[u]
+        # print i+1, "node:", u, "-->", IncInf[u]
         IncInf.pop(u) # exclude node u for next iterations
         PMIOA[u], PMIOA_MIP[u] = computePMIOA(G, u, theta, S, Ep)
         for v in PMIOA[u]:
@@ -187,3 +187,58 @@ def PMIA(G, k, theta, Ep):
                         IncInf[w] += alpha[(PMIIA[v], w)]*(1 - ap[(w, PMIIA[v])])
 
     return S
+
+if __name__ == "__main__":
+    import time
+    start = time.time()
+
+    G = nx.read_gpickle("../../graphs/hep.gpickle")
+    print 'Read graph G'
+    print time.time() - start
+
+    Ep = dict()
+    with open("Ep_hep_degree1.txt") as f:
+        for line in f:
+            data = line.split()
+            Ep[(int(data[0]), int(data[1]))] = float(data[2])
+
+    theta = 1.0/20
+    I = 250
+    DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
+    FILENAME = "DirectPMIAforDirect6.txt"
+    ftime = open('plotdata/time' + FILENAME, 'a+')
+    l2c = [[0, 0]]
+
+    for length in range(1, 250, 5):
+        time2length = time.time()
+        print "Start finding solution for length = %s" %length
+
+        time2S = time.time()
+        S = PMIA(G, length, theta, Ep)
+        print S
+        print 'Finish finding S in %s sec' %(time.time() - time2S)
+
+        print "Start calculating coverage..."
+        def map_AvgIAC (it):
+            return avgIAC(G, S, Ep, I)
+        # pool = multiprocessing.Pool(processes=None)
+        avg_size = 0
+        time2avg = time.time()
+        T = map(map_AvgIAC, range(4))
+        avg_size = sum(T)/len(T)
+        print 'Average coverage of %s nodes is %s' %(length, avg_size)
+        print 'Finished averaging seed set size in', time.time() - time2avg
+        print >>ftime, "%s %s" %(length, time.time() - time2S)
+
+        l2c.append([length, avg_size])
+        with open('plotdata/plot' + FILENAME, 'w+') as fresults:
+            json.dump(l2c, fresults)
+        with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
+            json.dump(l2c, fp)
+
+        print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
+        print '----------------------------------------------'
+
+
+    ftime.close()
+    print 'Total time: %s' %(time.time() - start)
