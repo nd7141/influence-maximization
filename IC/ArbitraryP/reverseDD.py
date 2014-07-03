@@ -22,8 +22,7 @@ def updateScores(scores_copied, t, S, Ep):
     maxk, maxv = max(scores_copied.iteritems(), key = operator.itemgetter(1))
     S.append(maxk)
     scores_copied.pop(maxk)
-    #TODO fix u. Should be maxv. Put inside the loop.
-    neighbors_weights = [G[u][v]['weight'] for v in G[u] if v not in S]
+    neighbors_weights = [G[maxk][v]['weight'] for v in G[maxk] if v not in S]
     w_avg = sum(neighbors_weights)/len(neighbors_weights)
     for v in G[maxk]:
         if v not in S:
@@ -48,7 +47,7 @@ if __name__ == '__main__':
     print 'Built graph G'
     print time.time() - start
 
-    tsize = 1000
+    tsize = 50
     I = 250
     length_to_coverage = {0:0}
     norm_parameters = dict()
@@ -76,6 +75,11 @@ if __name__ == '__main__':
     time2select = time.time()
     # add first node to S
     updateScores(scores_copied, t, S, Ep)
+    T = pool.map(mapAvgSize, [S]*4)
+    coverage = sum(T)/len(T)
+    Coverages[len(S)] = coverage
+    print '|S|: %s --> %s' %(len(S), coverage)
+
     Low = 1
     High = 2*Low
 
@@ -83,7 +87,7 @@ if __name__ == '__main__':
     while coverage < tsize:
         Low = len(S)
         High = 2*Low
-        while len(S) < 2*Low:
+        while len(S) < High:
             updateScores(scores_copied, t, S, Ep)
         T = pool.map(mapAvgSize, [S]*4)
         coverage = sum(T)/len(T)
@@ -103,19 +107,17 @@ if __name__ == '__main__':
         print '|S|: %s --> %s' %(len(lastS), coverage)
 
         if coverage < tsize:
-            Low = len(lastS)
+            Low = new_length
         else:
-            High = len(lastS)
+            High = new_length
 
-    # final check for k that reach coverage
-    if Coverages[Low] >= tsize:
-        finalS = S[:Low]
-    elif Coverages[High] >= tsize:
-        finalS = S[:High]
+    assert Coverages[Low] < tsize
+    assert Coverages[High] >= tsize
+    finalS = S[:High]
 
     print 'Finished selecting seed set S: %s sec' %(time.time() - time2select)
-    with open("plotdata/timeReverseDDforReverse3.txt", "w+") as fp:
-        fp.write("%s" %(time.time() - time2select))
+    # with open("plotdata/timeReverseDDforReverse3.txt", "w+") as fp:
+    #     fp.write("%s" %(time.time() - time2select))
     print 'Coverage: ', Coverages[len(finalS)]
     print finalS
     print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), tsize)
@@ -151,8 +153,8 @@ if __name__ == '__main__':
 
     length_to_coverage = sorted(length_to_coverage.iteritems(), key = lambda (dk, dv): dk)
 
-    with open("plotdata/plotReverseDDforReverse3.txt", "w+") as fp:
-        json.dump(length_to_coverage, fp)
+    # with open("plotdata/plotReverseDDforReverse3.txt", "w+") as fp:
+    #     json.dump(length_to_coverage, fp)
 
     print 'Total time:', time.time() - start
     console = []
