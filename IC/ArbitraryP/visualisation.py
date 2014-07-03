@@ -117,6 +117,26 @@ def plotLvsT (Lrange, Trange, TotalCCs, filename = "plots/LvsT_.png",
     fig.savefig(filename, dpi=fig.dpi)
     # plt.show()
 
+def plotTvsR (Trange, Rrange, k, filename = "plots/TvsR_.png",
+              model="Model"):
+
+    x = Rrange
+    y = Trange
+
+    fig = plt.figure()
+    ax = fig.gca()
+
+    plt.plot(x, y, 'r' + '--', linewidth=2)
+    p, = plt.plot(x, y, 'r' + 'o', markersize=6)
+
+    plt.xlabel('R')
+    plt.ylabel('T')
+
+    fig.suptitle('HepNEPT -- %s' %(model))
+    plt.title('k = %s' %k)
+
+    fig.savefig(filename, dpi=fig.dpi)
+    # plt.show()
 
 if __name__ == "__main__":
     # print "Plotting results..."
@@ -142,14 +162,23 @@ if __name__ == "__main__":
     # model = "Categories"
     # plotCCsSizeDistribution(histogram, bluedots, T, "plots/CCs_sizes_categories.png", L, TotalCCs, model, xlog=False)
 
-    print "Plotting L vs T..."
-    model = "Random"
-    with open("plotdata/LvsT_%s.txt" %model) as fp:
-        Trange = json.loads(fp.readline())
-        Lrange = json.loads(fp.readline())
-        TotalCCs = int(fp.readline())
+    # print "Plotting L vs T..."
+    # model = "Random"
+    # with open("plotdata/LvsT_%s.txt" %model) as fp:
+    #     Trange = json.loads(fp.readline())
+    #     Lrange = json.loads(fp.readline())
+    #     TotalCCs = int(fp.readline())
+    #
+    # plotLvsT(Lrange, Trange, TotalCCs, "plots/LvsT_%s.png" %model, model)
 
-    plotLvsT(Lrange, Trange, TotalCCs, "plots/LvsT_%s.png" %model, model)
+    print "Plotting T vs R..."
+    model = "MultiValency"
+    with open("plotdata/TvsR_%s.txt" %model) as fp:
+        k = int(fp.readline())
+        R2T = json.loads(fp.readline())
+    [Rrange, Trange] = zip(*R2T)
+
+    plotTvsR(Trange, Rrange, k, "plots/TvsR_%s.png" %model, model)
 
     # print "Plotting timing..."
     # CCWP_k = []
