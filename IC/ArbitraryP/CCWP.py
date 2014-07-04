@@ -93,7 +93,7 @@ if __name__ == '__main__':
     R = 500
     I = 250
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    FILENAME = "DirectCCWPforDirect6_.txt"
+    FILENAME = "TvsR_Random.txt"
     ftime = open('plotdata/time' + FILENAME, 'a+')
     DROPBOXftime = open(DROPBOX + 'plotdata/time' + FILENAME, 'w+')
     logfile = open('log.txt', 'w+')
@@ -102,72 +102,88 @@ if __name__ == '__main__':
 
     # get propagation probabilities
     Ep = dict()
-    with open("Ep_hep_degree1.txt") as f:
+    with open("Ep_hep_random1.txt") as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
-    length_to_coverage = {0:0}
     l2c = [[0,0]]
 
-    for length in range(1, 250, 5):
-        time2length = time.time()
-        print 'Start finding solution for length = %s' %length
-        print >>logfile, 'Start finding solution for length = %s' %length
-        time2S = time.time()
+    R2T = [[0, 0]]
+    pool = None
+    pool2 = None
 
-        print 'Start mapping...'
-        time2map = time.time()
-        # define map function
-        def map_CCWP(it):
-            return CCWP(G, length, Ep)
-        # pool = multiprocessing.Pool(processes=None)
-        Scores = map(map_CCWP, range(R))
-        print 'Finished mapping in', time.time() - time2map
+    for R in range(1, 500, 50):
+        print "R:", R
+        for length in range(150, 151, 5):
+            time2length = time.time()
+            print 'Start finding solution for length = %s' %length
+            print >>logfile, 'Start finding solution for length = %s' %length
+            time2S = time.time()
 
-        print 'Reducing scores...'
-        time2reduce = time.time()
-        scores = {v: sum([s[v] for s in Scores]) for v in G}
-        scores_copied = deepcopy(scores)
-        S = []
-        # penalization phase
-        for it in range(length):
-            maxk, maxv = max(scores_copied.iteritems(), key = lambda (dk, dv): dv)
-            S.append(maxk)
-            scores_copied.pop(maxk) # remove top element from dict
-            for v in G[maxk]:
-                if v not in S:
-                    # weight = scores_copied[v]/maxv
-                    # print weight,
-                    penalty = (1-Ep[(maxk, v)])**(G[maxk][v]['weight'])
-                    scores_copied[v] = penalty*scores_copied[v]
-        print S
-        print >>logfile, json.dumps(S)
-        print >>ftime, "%s %s" %(length, time.time() - time2S)
-        print 'Finished reducing in', time.time() - time2reduce
+            print 'Start mapping...'
+            time2map = time.time()
+            # define map function
+            def map_CCWP(it):
+                return CCWP(G, length, Ep)
+            # if pool == None:
+            #     pool = multiprocessing.Pool(processes=None)
+            Scores = map(map_CCWP, range(R))
+            # print 'Finished mapping in', time.time() - time2map
 
-        print 'Start calculating coverage...'
-        def map_AvgIAC (it):
-            return avgIAC(G, S, Ep, I)
-        # pool2 = multiprocessing.Pool(processes=None)
-        avg_size = 0
-        time2avg = time.time()
-        T = map(map_AvgIAC, range(4))
-        print T
-        avg_size = sum(T)/len(T)
-        print 'Average coverage of %s nodes is %s' %(length, avg_size)
-        print 'Finished averaging seed set size in', time.time() - time2avg
+            print 'Start reducing...'
+            time2reduce = time.time()
+            scores = {v: sum([s[v] for s in Scores]) for v in G}
+            scores_copied = deepcopy(scores)
+            S = []
+            # penalization phase
+            for it in range(length):
+                maxk, maxv = max(scores_copied.iteritems(), key = lambda (dk, dv): dv)
+                S.append(maxk)
+                scores_copied.pop(maxk) # remove top element from dict
+                for v in G[maxk]:
+                    if v not in S:
+                        # weight = scores_copied[v]/maxv
+                        # print weight,
+                        penalty = (1-Ep[(maxk, v)])**(G[maxk][v]['weight'])
+                        scores_copied[v] = penalty*scores_copied[v]
+            print S
+            print >>logfile, json.dumps(S)
+            print >>ftime, "%s %s" %(length, time.time() - time2S)
+            # print 'Finished reducing in', time.time() - time2reduce
+            print 'Finish finding S in %s sec...' %(time.time() - time2S)
 
-        length_to_coverage[length] = avg_size
-        # l2c = sorted(length_to_coverage.iteritems(), key = lambda (dk, dv): dk)
-        l2c.append([length, avg_size])
-        with open('plotdata/plot' + FILENAME, 'w+') as fp:
-            json.dump(l2c, fp)
-        with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
-            json.dump(l2c, fp)
+            print 'Start calculating coverage...'
+            def map_AvgIAC (it):
+                return avgIAC(G, S, Ep, I)
+            # TODO for some reason pool.map uses parameters from 1st iteration. Fix to use pool.map inside a loop.
+            # if pool2 == None:
+            #     pool2 = multiprocessing.Pool(processes=None)
+            avg_size = 0
+            time2avg = time.time()
+            Ts = map(map_AvgIAC, range(4))
+            print Ts
+            avg_size = sum(Ts)/len(Ts)
+            print 'Average coverage of %s nodes is %s' %(length, avg_size)
+            print 'Finished averaging seed set size in', time.time() - time2avg
 
-        print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
-        print '----------------------------------------------'
+            l2c.append([length, avg_size])
+            # with open('plotdata/plot' + FILENAME, 'w+') as fp:
+            #     json.dump(l2c, fp)
+            # with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
+            #     json.dump(l2c, fp)
+            #
+
+            R2T.append([R, avg_size])
+            with open('plotdata/' + FILENAME, 'w+') as fp:
+                print >>fp, length
+                json.dump(R2T, fp)
+            with open(DROPBOX + 'plotdata/' + FILENAME, 'w+') as fp:
+                print >>fp, length
+                json.dump(R2T, fp)
+
+            print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
+            print '----------------------------------------------'
 
     ftime.close()
     logfile.close()
