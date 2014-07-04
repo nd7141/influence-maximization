@@ -138,6 +138,27 @@ def plotTvsR (Trange, Rrange, k, filename = "plots/TvsR_.png",
     fig.savefig(filename, dpi=fig.dpi)
     # plt.show()
 
+def plotkvsR (krange, Rrange, T, filename = "plots/kvsR_.png",
+              model="Model"):
+
+    x = Rrange
+    y = krange
+
+    fig = plt.figure()
+    ax = fig.gca()
+
+    plt.plot(x, y, 'r' + '--', linewidth=2)
+    p, = plt.plot(x, y, 'r' + 'o', markersize=6)
+
+    plt.xlabel('R')
+    plt.ylabel('k')
+
+    fig.suptitle('HepNEPT -- %s' %(model))
+    plt.title('T = %s' %T)
+
+    fig.savefig(filename, dpi=fig.dpi)
+    # plt.show()
+
 if __name__ == "__main__":
     # print "Plotting results..."
     # # DD_length_to_coverage = json.load(open("plotdata/plotDirectDDforDirect5.txt"))
@@ -171,14 +192,23 @@ if __name__ == "__main__":
     #
     # plotLvsT(Lrange, Trange, TotalCCs, "plots/LvsT_%s.png" %model, model)
 
-    print "Plotting T vs R..."
-    model = "MultiValency"
-    with open("plotdata/TvsR_%s.txt" %model) as fp:
-        k = int(fp.readline())
-        R2T = json.loads(fp.readline())
-    [Rrange, Trange] = zip(*R2T)
+    # print "Plotting T vs R..."
+    # model = "Categories"
+    # with open("plotdata/TvsR_%s.txt" %model) as fp:
+    #     k = int(fp.readline())
+    #     R2T = json.loads(fp.readline())
+    # [Rrange, Trange] = zip(*R2T)
+    #
+    # plotTvsR(Trange, Rrange, k, "plots/TvsR_%s.png" %model, model)
 
-    plotTvsR(Trange, Rrange, k, "plots/TvsR_%s.png" %model, model)
+    print "Plotting k vs R..."
+    model = "Categories"
+    with open("plotdata/kvsR_%s0.txt" %model) as fp:
+        T = int(fp.readline())
+        R2k = json.loads(fp.readline())
+    [Rrange, krange] = zip(*R2k)
+
+    plotkvsR(krange, Rrange, T, "plots/kvsR_%s.png" %model, model)
 
     # print "Plotting timing..."
     # CCWP_k = []
