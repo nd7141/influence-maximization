@@ -94,7 +94,7 @@ def getScores(G, Ep, T, min_size):
     num = 0 # number of CC
     qualified_nodes = []
     qualified_components = []
-    qCCs_sizes = []
+    CCs_sizes = []
     # perform BFS to discover CC
     for node in E:
         if not explored[node]:
@@ -108,13 +108,13 @@ def getScores(G, Ep, T, min_size):
                     CCs[num].append(neighbor)
                     component.extend(E[neighbor].keys())
 
+            heapq.heappush(CCs_sizes, -len(CCs[num]))
             # assign scores
             if len(CCs[num]) >= min_size:
                 qualified_components.append(CCs[num])
-                heapq.heappush(qCCs_sizes, -len(CCs[num]))
-                for node in CCs[num]:
-                    qualified_nodes.append(node)
-                    scores[node] = 1.0/len(CCs[num])
+                for v1 in CCs[num]:
+                    qualified_nodes.append(v1)
+                    scores[v1] = 1.0/len(CCs[num])
 
     # normalize scores
     Q = len(qualified_components)
@@ -125,7 +125,7 @@ def getScores(G, Ep, T, min_size):
     cumsum = 0
     L = 0
     while cumsum < T:
-        size = heapq.heappop(qCCs_sizes)
+        size = heapq.heappop(CCs_sizes)
         cumsum -= size
         L += 1
 
@@ -168,7 +168,9 @@ if __name__ == "__main__":
 
     R = 500
     I = 250
-    T = 300
+    T = 600
+    DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
+    FILENAME = "kvsR_MultiValency.txt"
     best_S = []
     min_lenS = float("Inf")
     pool2algo = None
@@ -184,109 +186,125 @@ if __name__ == "__main__":
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
-    time2preprocess = time.time()
-    print 'Preprocessing to find minimal size of CC...'
-    min_size = float("Inf")
-    # find min_size to select CC within
-    for length_it in range(5):
-        CC = findCC(G, Ep)
-        L, sortedCC = findL(CC, T)
-        LCC_size = sortedCC[L-1][0]
-        if LCC_size < min_size:
-            min_size = LCC_size
-    print 'Min size:', min_size
-    print 'Finished preprocessing in %s sec' %(time.time() - time2preprocess)
+    R2k = [[0, 0]]
 
-    def mapAvgSize (S):
-        return avgIAC(G, S, Ep, I)
-    def mapReverseCCWP (it):
-        return reverseCCWP(G, T, Ep, min_size)
-    if pool2algo == None:
-        pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-    if pool2average == None:
-        pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+    for R in range(1, 5002, 100):
+        print "R:", R
+        time2preprocess = time.time()
+        print 'Preprocessing to find minimal size of CC...'
+        min_size = float("Inf")
+        # find min_size to select CC within
+        for length_it in range(50):
+            CC = findCC(G, Ep)
+            L, sortedCC = findL(CC, T)
+            LCC_size = sortedCC[L-1][0]
+            if LCC_size < min_size:
+                min_size = LCC_size
+        print 'Min size:', min_size
+        print 'Finished preprocessing in %s sec' %(time.time() - time2preprocess)
 
-    time2map = time.time()
-    print 'Start mapping...'
-    result = pool2algo.map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
-    print 'Finished mapping in %s sec' %(time.time() - time2map)
+        def mapAvgSize (S):
+            return avgIAC(G, S, Ep, I)
+        def mapReverseCCWP (it):
+            return getScores(G, Ep, T, min_size)
+        # if pool2algo == None:
+        #     pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+        # if pool2average == None:
+        #     pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
 
-    time2reduce = time.time()
-    print 'Start reducing scores...'
-    scores = dict(zip(G.nodes(), [0]*len(G)))
-    maxL = -1
-    minL = float("Inf")
-    avgL = 0
-    for (Sc, L) in result:
-        avgL += L/len(result)
-        if L > maxL:
-            maxL = L
-        if L < minL:
-            minL = L
-        for (node, score) in Sc.iteritems():
-            scores[node] += score
-    print 'Finished reducing in %s sec' %(time.time() - time2reduce)
-    print 'avgL', avgL
-    print 'minL', minL
-    print 'maxL', maxL
+        time2map = time.time()
+        print 'Start mapping...'
+        # result = pool2algo.map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
+        result = map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
+        print 'Finished mapping in %s sec' %(time.time() - time2map)
 
-    time2select = time.time()
-    print 'Start selecting seed set S...'
+        time2reduce = time.time()
+        print 'Start reducing scores...'
+        scores = dict(zip(G.nodes(), [0]*len(G)))
+        maxL = -1
+        minL = float("Inf")
+        avgL = 0
+        for (Sc, L) in result:
+            avgL += L/len(result)
+            if L > maxL:
+                maxL = L
+            if L < minL:
+                minL = L
+            for (node, score) in Sc.iteritems():
+                scores[node] += score
+        print 'Finished reducing in %s sec' %(time.time() - time2reduce)
+        print 'avgL', avgL
+        print 'minL', minL
+        print 'maxL', maxL
 
-    # select first top-L nodes with penalization
-    scores_copied = deepcopy(scores)
-    S = []
-    Coverages = {0:0}
+        time2select = time.time()
+        print 'Start selecting seed set S...'
 
-    # add first nodes (can be minL, maxL, avgL, 1, etc.)
-    for i in range(int(minL)):
-        updateScores(scores_copied, S, Ep)
-    # calculate spread for top-L nodes
-    Ts = pool2average.map(mapAvgSize, [S]*4)
-    coverage = sum(Ts)/len(Ts)
-    Coverages[len(S)] = coverage
-    print '|S|: %s --> %s' %(len(S), coverage)
+        # select first top-L nodes with penalization
+        scores_copied = deepcopy(scores)
+        S = []
+        Coverages = {0:0}
 
-    # find Low and High
-    if coverage > T:
-        Low = 0
-        High = len(S)
-    else:
-        while coverage < T:
-            Low = len(S)
-            High = 2*Low
-            while len(S) < High:
-                updateScores(scores_copied, S, Ep)
-            Ts = pool2average.map(mapAvgSize, [S]*4)
-            coverage = sum(Ts)/len(Ts)
-            Coverages[len(S)] = coverage
-            print '|S|: %s --> %s' %(len(S), coverage)
-
-    # find boundary using binary search
-    lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
-    while Low + 1 != High:
-        time2double = time.time()
-        new_length = Low + (High - Low)//2
-        lastS = S[:new_length]
-
-        Ts = pool2average.map(mapAvgSize, [lastS]*4)
+        # add first nodes (can be minL, maxL, avgL, 1, etc.)
+        for i in range(int(maxL)):
+            updateScores(scores_copied, S, Ep)
+        # calculate spread for top-L nodes
+        # Ts = pool2average.map(mapAvgSize, [S]*4)
+        Ts = map(mapAvgSize, [S]*4)
         coverage = sum(Ts)/len(Ts)
-        Coverages[new_length] = coverage
-        print '|S|: %s --> %s' %(len(lastS), coverage)
+        Coverages[len(S)] = coverage
+        print '|S|: %s --> %s' %(len(S), coverage)
 
-        if coverage < T:
-            Low = new_length
+        # find Low and High
+        if coverage > T:
+            Low = 0
+            High = len(S)
         else:
-            High = new_length
+            while coverage < T:
+                Low = len(S)
+                High = 2*Low
+                while len(S) < High:
+                    updateScores(scores_copied, S, Ep)
+                # Ts = pool2average.map(mapAvgSize, [S]*4)
+                Ts = map(mapAvgSize, [S]*4)
+                coverage = sum(Ts)/len(Ts)
+                Coverages[len(S)] = coverage
+                print '|S|: %s --> %s' %(len(S), coverage)
 
-    assert Coverages[Low] < T
-    assert Coverages[High] >= T
-    finalS = S[:High]
+        # find boundary using binary search
+        lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
+        while Low + 1 != High:
+            time2double = time.time()
+            new_length = Low + (High - Low)//2
+            lastS = S[:new_length]
 
-    print finalS
-    print "Number of binary steps:", len(Coverages) - 1
-    print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
-    print 'Finished selecting seed set S in %s sec' %(time.time() - time2select)
+            # Ts = pool2average.map(mapAvgSize, [lastS]*4)
+            Ts = map(mapAvgSize, [lastS]*4)
+            coverage = sum(Ts)/len(Ts)
+            Coverages[new_length] = coverage
+            print '|S|: %s --> %s' %(len(lastS), coverage)
+
+            if coverage < T:
+                Low = new_length
+            else:
+                High = new_length
+
+        assert Coverages[Low] < T
+        assert Coverages[High] >= T
+        finalS = S[:High]
+        R2k.append([R, High])
+        with open('plotdata/' + FILENAME, 'w+') as fp:
+            print >>fp, T
+            json.dump(R2k, fp)
+        with open(DROPBOX + 'plotdata/' + FILENAME, 'w+') as fp:
+            print >>fp, T
+            json.dump(R2k, fp)
+
+        print finalS
+        print "Number of binary steps:", len(Coverages) - 1
+        print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
+        print 'Finished selecting seed set S in %s sec' %(time.time() - time2select)
+        print '----------------------------------------------'
     # with open("plotdata/timeReverseCCWPforReverse3.txt", "w+") as fp:
     #     fp.write("%s" %(time.time() - time2select))
     #
@@ -297,7 +315,7 @@ if __name__ == "__main__":
     # with open("plotdata/rawCCWPTimeforDirect2.txt", "a+") as f:
     #     json.dump({T: time.time() - start}, f)
     #     print >>f
-    # 
+    #
     # # map length: [0,len(S)] to coverage
     # print 'Start estimating coverages...'
     # step = 5
