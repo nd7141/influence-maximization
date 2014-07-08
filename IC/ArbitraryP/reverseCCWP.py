@@ -44,7 +44,7 @@ def findL(CCs, T):
             break
     return L, sortedCCs
 
-def reverseCCWP(G, T, Ep, min_size):
+def reverseCCWP(G, Ep, T, min_size):
     '''
      Input:
      G -- undirected graph (nx.Graph)
@@ -64,19 +64,32 @@ def reverseCCWP(G, T, Ep, min_size):
 
     # find number of CC assign scores to
     # (most likely different from L because selects all CCs of size up to min_size)
-    total_number_of_CC = 0
-    N = 0
+    QCC = 0 # qualified CCs
+    QN = 0 # qualified nodes
     for size, _ in sortedCC:
         if size >= min_size:
-            total_number_of_CC += 1
-            N += size
+            QCC += 1
+            QN += size
         else:
             break
 
     # assign scores to selected CCs
-    for length, numberCC in sortedCC[:total_number_of_CC]:
-        weighted_score = 1.0/(length*total_number_of_CC)
-        # weighted_score = 1
+    prev_length  = sortedCC[0][0]
+    rank = 1
+    for length, numberCC in sortedCC[:QCC]:
+        if length != prev_length:
+            prev_length = length
+            rank += 1
+        weighted_score = 1.0/length # updatef = 1
+        # weighted_score = 1 # updatef = 2
+        # weighted_score = length # updatef = 3
+        # weighted_score = 1.0/length**.5 # updatef = 4
+        # weighted_score = 1.0/length**2  # updatef = 5
+        # weighted_score = L/length # updatef = 6
+        # weighted_score = 1.0/(length*L) # updatef = 7
+        # weighted_score = 1.0/(1 - (1 - length)*(1 - rank)/(1 - L)) # updatef = 8
+        # weighted_score = 1 - (length - 1)*(1 - rank)/(length*(1 - L)) # updatef = 9
+        # weighted_score = 1/QN #updatef = 10
         for node in CC[numberCC]:
             scores[node] = weighted_score
     return scores, L
@@ -97,29 +110,50 @@ def getScores(G, Ep, T, min_size):
     CCs_sizes = []
     # perform BFS to discover CC
     for node in E:
-        if not explored[node]:
-            num += 1
-            explored[node] = True
-            CCs[num] = [node]
-            component = E[node].keys()
-            for neighbor in component:
-                if not explored[neighbor]:
-                    explored[neighbor] = True
-                    CCs[num].append(neighbor)
-                    component.extend(E[neighbor].keys())
+        # TODO for some reason using pool.Map tries to access explored[node] that doesn't exist. Strange. Fix later.
+        try:
+            if not explored[node]:
+                num += 1
+                explored[node] = True
+                CCs[num] = [node]
+                try:
+                    component = E[node].keys()
+                except KeyError:
+                    print 'CC:', node
+                for neighbor in component:
+                    if not explored[neighbor]:
+                        explored[neighbor] = True
+                        try:
+                            CCs[num].append(neighbor)
+                        except KeyError:
+                            print 'CCs:', num
+                        try:
+                            component.extend(E[neighbor].keys())
+                        except KeyError:
+                            print "E_neighbor:", neighbor
 
-            heapq.heappush(CCs_sizes, -len(CCs[num]))
-            # assign scores
-            if len(CCs[num]) >= min_size:
-                qualified_components.append(CCs[num])
-                for v1 in CCs[num]:
-                    qualified_nodes.append(v1)
-                    scores[v1] = 1.0/len(CCs[num])
+                heapq.heappush(CCs_sizes, -len(CCs[num]))
+                # assign scores
+                size = len(CCs[num])
+                if size >= min_size:
+                    qualified_components.append(CCs[num])
+                    weighted_score = 1.0/size # updatef = 1
+                    # weighted_score = 1 # updatef = 2
+                    # weighted_score = size # updatef = 3
+                    # weighted_score = 1.0/size**.5 # updatef = 4
+                    # weighted_score = 1.0/size**2  # updatef = 5
+                    for v1 in CCs[num]:
+                        qualified_nodes.append(v1)
+                        scores[v1] += weighted_score
+        except KeyError:
+            print 'Explored:', node
+            raise
 
     # normalize scores
-    Q = len(qualified_components)
-    for node in scores:
-        scores[node] /= Q
+    # Q = len(qualified_components)
+    # for node in scores:
+        # scores[node] *= Q # updatef = 6
+        # scores[node] /= Q # updatef = 7
 
     # determine L
     cumsum = 0
@@ -168,9 +202,14 @@ if __name__ == "__main__":
 
     R = 500
     I = 250
-    T = 600
+    T = 100
+
+    updatef = 1
+    model = "MultiValency"
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    FILENAME = "kvsR_MultiValency.txt"
+    FILENAME = "reverseCCWPmaxL_%s.txt" %model
+    ftime = "time2kCCWPmaxL_%s.txt" %model
+
     best_S = []
     min_lenS = float("Inf")
     pool2algo = None
@@ -188,123 +227,154 @@ if __name__ == "__main__":
 
     R2k = [[0, 0]]
 
-    for R in range(1, 5002, 100):
-        print "R:", R
-        time2preprocess = time.time()
-        print 'Preprocessing to find minimal size of CC...'
-        min_size = float("Inf")
-        # find min_size to select CC within
-        for length_it in range(50):
-            CC = findCC(G, Ep)
-            L, sortedCC = findL(CC, T)
-            LCC_size = sortedCC[L-1][0]
-            if LCC_size < min_size:
-                min_size = LCC_size
-        print 'Min size:', min_size
-        print 'Finished preprocessing in %s sec' %(time.time() - time2preprocess)
+    time2preprocess = time.time()
+    print 'Preprocessing to find minimal size of CC...'
+    min_size = float("Inf")
+    # find min_size to select CC within
+    for length_it in range(50):
+        CC = findCC(G, Ep)
+        L, sortedCC = findL(CC, T)
+        LCC_size = sortedCC[L-1][0]
+        if LCC_size < min_size:
+            min_size = LCC_size
+    print 'Min size:', min_size
+    print 'Finished preprocessing in %s sec' %(time.time() - time2preprocess)
 
-        def mapAvgSize (S):
-            return avgIAC(G, S, Ep, I)
-        def mapReverseCCWP (it):
-            return getScores(G, Ep, T, min_size)
-        # if pool2algo == None:
-        #     pool2algo = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-        # if pool2average == None:
-        #     pool2average = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+    def mapAvgSize (S):
+        return avgIAC(G, S, Ep, I)
+    def mapReverseCCWP (it):
+        return reverseCCWP(G, Ep, T, min_size)
+        # return getScores(G, Ep, T, min_size)
+    if pool2algo == None:
+        pool2algo = multiprocessing.Pool(processes=None)
+    if pool2average == None:
+        pool2average = multiprocessing.Pool(processes=None)
 
-        time2map = time.time()
-        print 'Start mapping...'
-        # result = pool2algo.map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
-        result = map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
-        print 'Finished mapping in %s sec' %(time.time() - time2map)
+    time2map = time.time()
+    print 'Start mapping...'
+    result = pool2algo.map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
+    # result = map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
+    print 'Finished mapping in %s sec' %(time.time() - time2map)
 
-        time2reduce = time.time()
-        print 'Start reducing scores...'
-        scores = dict(zip(G.nodes(), [0]*len(G)))
-        maxL = -1
-        minL = float("Inf")
-        avgL = 0
-        for (Sc, L) in result:
-            avgL += L/len(result)
-            if L > maxL:
-                maxL = L
-            if L < minL:
-                minL = L
-            for (node, score) in Sc.iteritems():
-                scores[node] += score
-        print 'Finished reducing in %s sec' %(time.time() - time2reduce)
-        print 'avgL', avgL
-        print 'minL', minL
-        print 'maxL', maxL
+    time2reduce = time.time()
+    print 'Start reducing scores...'
+    scores = dict(zip(G.nodes(), [0]*len(G)))
+    maxL = -1
+    minL = float("Inf")
+    avgL = 0
+    for (Sc, L) in result:
+        avgL += L/len(result)
+        if L > maxL:
+            maxL = L
+        if L < minL:
+            minL = L
+        for (node, score) in Sc.iteritems():
+            scores[node] += score
+    print 'Finished reducing in %s sec' %(time.time() - time2reduce)
+    print 'avgL', avgL
+    print 'minL', minL
+    print 'maxL', maxL
 
-        time2select = time.time()
-        print 'Start selecting seed set S...'
+    time2select = time.time()
+    print 'Start selecting seed set S...'
 
-        # select first top-L nodes with penalization
-        scores_copied = deepcopy(scores)
-        S = []
-        Coverages = {0:0}
+    # select first top-L nodes with penalization
+    scores_copied = deepcopy(scores)
+    S = []
+    Coverages = {0:0}
 
-        # add first nodes (can be minL, maxL, avgL, 1, etc.)
-        for i in range(int(maxL)):
-            updateScores(scores_copied, S, Ep)
-        # calculate spread for top-L nodes
-        # Ts = pool2average.map(mapAvgSize, [S]*4)
-        Ts = map(mapAvgSize, [S]*4)
-        coverage = sum(Ts)/len(Ts)
-        Coverages[len(S)] = coverage
-        print '|S|: %s --> %s' %(len(S), coverage)
+    # add first nodes (can be minL, maxL, avgL, 1, etc.)
+    for i in range(int(maxL)):
+        updateScores(scores_copied, S, Ep)
+    # calculate spread for top-L nodes
+    time2Ts = time.time()
+    Ts = pool2average.map(mapAvgSize, [S]*4)
+    # Ts = map(mapAvgSize, [S]*4)
+    coverage = sum(Ts)/len(Ts)
+    Coverages[len(S)] = coverage
+    time2coverage = time.time() - time2Ts
+    print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
+    with open("plotdata/" + ftime, 'a+') as fp:
+        print >>fp, len(S), time2coverage
+    with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
+        print >>fp, len(S), time2coverage
 
-        # find Low and High
-        if coverage > T:
-            Low = 0
-            High = len(S)
-        else:
-            while coverage < T:
-                Low = len(S)
-                High = 2*Low
-                while len(S) < High:
-                    updateScores(scores_copied, S, Ep)
-                # Ts = pool2average.map(mapAvgSize, [S]*4)
-                Ts = map(mapAvgSize, [S]*4)
-                coverage = sum(Ts)/len(Ts)
-                Coverages[len(S)] = coverage
-                print '|S|: %s --> %s' %(len(S), coverage)
-
-        # find boundary using binary search
-        lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
-        while Low + 1 != High:
-            time2double = time.time()
-            new_length = Low + (High - Low)//2
-            lastS = S[:new_length]
-
-            # Ts = pool2average.map(mapAvgSize, [lastS]*4)
-            Ts = map(mapAvgSize, [lastS]*4)
+    # find Low and High
+    if coverage > T:
+        Low = 0
+        High = len(S)
+    else:
+        while coverage < T:
+            Low = len(S)
+            High = 2*Low
+            while len(S) < High:
+                updateScores(scores_copied, S, Ep)
+            time2Ts = time.time()
+            Ts = pool2average.map(mapAvgSize, [S]*4)
+            # Ts = map(mapAvgSize, [S]*4)
             coverage = sum(Ts)/len(Ts)
-            Coverages[new_length] = coverage
-            print '|S|: %s --> %s' %(len(lastS), coverage)
+            Coverages[len(S)] = coverage
+            time2coverage = time.time() - time2Ts
+            print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
+            with open("plotdata/" + ftime, 'a+') as fp:
+                print >>fp, len(S), time2coverage
+            with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
+                print >>fp, len(S), time2coverage
 
-            if coverage < T:
-                Low = new_length
-            else:
-                High = new_length
+    # find boundary using binary search
+    lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
+    while Low + 1 != High:
+        time2double = time.time()
+        new_length = Low + (High - Low)//2
+        lastS = S[:new_length]
+        time2Ts = time.time()
+        Ts = pool2average.map(mapAvgSize, [lastS]*4)
+        # Ts = map(mapAvgSize, [lastS]*4)
+        coverage = sum(Ts)/len(Ts)
+        Coverages[new_length] = coverage
+        time2coverage = time.time() - time2Ts
+        print '|S|: %s --> %s nodes | %s sec' %(len(lastS), coverage, time2coverage)
+        with open("plotdata/" + ftime, 'a+') as fp:
+            print >>fp, len(S), time2coverage
+        with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
+            print >>fp, len(S), time2coverage
 
-        assert Coverages[Low] < T
-        assert Coverages[High] >= T
-        finalS = S[:High]
-        R2k.append([R, High])
-        with open('plotdata/' + FILENAME, 'w+') as fp:
-            print >>fp, T
-            json.dump(R2k, fp)
-        with open(DROPBOX + 'plotdata/' + FILENAME, 'w+') as fp:
-            print >>fp, T
-            json.dump(R2k, fp)
+        if coverage < T:
+            Low = new_length
+        else:
+            High = new_length
 
-        print finalS
-        print "Number of binary steps:", len(Coverages) - 1
-        print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
-        print 'Finished selecting seed set S in %s sec' %(time.time() - time2select)
-        print '----------------------------------------------'
+    assert Coverages[Low] < T
+    assert Coverages[High] >= T
+    finalS = S[:High]
+    R2k.append([R, High])
+    # with open('plotdata/' + FILENAME, 'w+') as fp:
+    #     print >>fp, T
+    #     json.dump(R2k, fp)
+    # with open(DROPBOX + 'plotdata/' + FILENAME, 'w+') as fp:
+    #     print >>fp, T
+    #     json.dump(R2k, fp)
+
+    # with open('plotdata/' + FILENAME, 'a+') as fp:
+    #     print >>fp, updatef, High
+    # with open(DROPBOX + 'plotdata/' + FILENAME, 'a+') as fp:
+    #     print >>fp, updatef, High
+
+    print finalS
+    print "Number of binary steps:", len(Coverages) - 1
+    print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
+    with open('plotdata/' + FILENAME, 'a+') as fp:
+        print >>fp, T, High
+    with open(DROPBOX + 'plotdata/' + FILENAME, 'a+') as fp:
+        print >>fp, T, High
+    with open("plotdata/BinaryStepsCCWPmaxL.txt", 'a+') as fp:
+        print >>fp, T, len(Coverages) - 1
+    with open(DROPBOX + "plotdata/BinaryStepsCCWPmaxL.txt", 'a+') as fp:
+        print >>fp, T, len(Coverages) - 1
+
+
+    print 'Finished selecting seed set S in %s sec' %(time.time() - time2select)
+    print '----------------------------------------------'
     # with open("plotdata/timeReverseCCWPforReverse3.txt", "w+") as fp:
     #     fp.write("%s" %(time.time() - time2select))
     #
