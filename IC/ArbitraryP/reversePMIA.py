@@ -175,12 +175,13 @@ if __name__ == "__main__":
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
     theta = 1.0/20
-    T = 600
+    T = 500
     I = 250
 
+    model = "Random"
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    FILENAME = "reversePMIA_MultiValency.txt"
-    ftime = open('plotdata/time' + FILENAME, 'a+')
+    FILENAME = "reversePMIA_%s.txt" %model
+    ftime = "time2kPMIA_%s.txt" %model
 
 
     pool = None
@@ -189,7 +190,7 @@ if __name__ == "__main__":
     def mapAvgSize (S):
         return avgIAC(G, S, Ep, I)
     if pool == None:
-        pool = multiprocessing.Pool(processes=1)
+        pool = multiprocessing.Pool(processes=2)
 
     print 'Start Initialization for PMIA...'
     S = []
@@ -220,7 +221,12 @@ if __name__ == "__main__":
     Ts = pool.map(mapAvgSize, [S]*4)
     coverage = sum(Ts)/len(Ts)
     Coverages[len(S)] = coverage
-    print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time.time() - time2Ts)
+    time2coverage = time.time() - time2Ts
+    print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
+    with open("plotdata/" + ftime, 'a+') as fp:
+        print >>fp, len(S), time2coverage
+    with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
+        print >>fp, len(S), time2coverage
 
     Low = 0
     High = 1
@@ -235,7 +241,12 @@ if __name__ == "__main__":
         Ts = pool.map(mapAvgSize, [S]*4)
         coverage = sum(Ts)/len(Ts)
         Coverages[len(S)] = coverage
-        print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time.time() - time2Ts)
+        time2coverage = time.time() - time2Ts
+        print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
+        with open("plotdata/" + ftime, 'a+') as fp:
+            print >>fp, len(S), time2coverage
+        with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
+            print >>fp, len(S), time2coverage
 
     # find boundary using binary search
     lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
@@ -247,7 +258,12 @@ if __name__ == "__main__":
         Ts = pool.map(mapAvgSize, [lastS]*4)
         coverage = sum(Ts)/len(Ts)
         Coverages[new_length] = coverage
-        print '|S|: %s --> %s nodes | %s sec' %(len(lastS), coverage, time.time() - time2Ts)
+        time2coverage = time.time() - time2Ts
+        print '|S|: %s --> %s nodes | %s sec' %(len(lastS), coverage, time2coverage)
+        with open("plotdata/" + ftime, 'a+') as fp:
+            print >>fp, new_length, time2coverage
+        with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
+            print >>fp, new_length, time2coverage
 
         if coverage < T:
             Low = new_length
@@ -268,6 +284,9 @@ if __name__ == "__main__":
         print >>fp, T, High
     with open(DROPBOX + 'plotdata/' + FILENAME, 'a+') as fp:
         print >>fp, T, High
-
+    with open("plotdata/BinaryStepsPMIA_%s.txt" %model, 'a+') as fp:
+        print >>fp, T, len(Coverages) - 1
+    with open(DROPBOX + "plotdata/BinaryStepsPMIA_%s.txt" %model, 'a+') as fp:
+        print >>fp, T, len(Coverages) - 1
 
     print 'Total time: %s' %(time.time() - start)

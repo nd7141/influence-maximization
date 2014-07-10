@@ -52,7 +52,7 @@ if __name__ == '__main__':
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
-    T = 750
+    T = 500
     I = 250
 
     length_to_coverage = {0:0}
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     coverage = 0
     S = []
 
-    model = "MultiValency"
+    model = "Random"
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
     FILENAME = "reverseGDD_%s.txt" %model
     ftime = "time2kGDD_%s.txt" %model
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     def mapAvgSize (S):
         return avgIAC(G, S, Ep, I)
     if pool == None:
-        pool = multiprocessing.Pool(processes=None)
+        pool = multiprocessing.Pool(processes=4)
 
     print "Initializing scores..."
     scores, active, inactive = getScores(G, Ep)
@@ -121,9 +121,8 @@ if __name__ == '__main__':
         Ts = pool.map(mapAvgSize, [lastS]*4)
         coverage = sum(Ts)/len(Ts)
         Coverages[new_length] = coverage
-        print '|S|: %s --> %s' %(len(lastS), coverage)
         time2coverage = time.time() - time2Ts
-        print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
+        print '|S|: %s --> %s nodes | %s sec' %(len(lastS), coverage, time2coverage)
         with open("plotdata/" + ftime, 'a+') as fp:
             print >>fp, new_length, time2coverage
         with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
@@ -144,6 +143,14 @@ if __name__ == '__main__':
     print 'Coverage: ', Coverages[len(finalS)]
     print finalS
     print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
+    with open('plotdata/' + FILENAME, 'a+') as fp:
+        print >>fp, T, High
+    with open(DROPBOX + 'plotdata/' + FILENAME, 'a+') as fp:
+        print >>fp, T, High
+    with open("plotdata/BinaryStepsGDD_%s.txt" %model, 'a+') as fp:
+        print >>fp, T, len(Coverages) - 1
+    with open(DROPBOX + "plotdata/BinaryStepsGDD_%s.txt" %model, 'a+') as fp:
+        print >>fp, T, len(Coverages) - 1
 
 
     # # map length: [0,len(finalS)] to coverage
