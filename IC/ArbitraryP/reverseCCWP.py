@@ -202,13 +202,14 @@ if __name__ == "__main__":
 
     R = 500
     I = 250
-    T = 100
+    T = 2000
+    r = 1
 
     updatef = 1
-    model = "MultiValency"
+    model = "Random"
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    FILENAME = "reverseCCWPmaxL_%s.txt" %model
-    ftime = "time2kCCWPmaxL_%s.txt" %model
+    FILENAME = "reverseCCWPrmaxL_%s.txt" %model
+    ftime = "time2kCCWPrmaxL_%s.txt" %model
 
     best_S = []
     min_lenS = float("Inf")
@@ -220,7 +221,7 @@ if __name__ == "__main__":
 
     # get propagation probabilities
     Ep = dict()
-    with open("Ep_hep_range1.txt") as f:
+    with open("Ep_hep_random1.txt") as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
@@ -246,9 +247,9 @@ if __name__ == "__main__":
         return reverseCCWP(G, Ep, T, min_size)
         # return getScores(G, Ep, T, min_size)
     if pool2algo == None:
-        pool2algo = multiprocessing.Pool(processes=None)
+        pool2algo = multiprocessing.Pool(processes=4)
     if pool2average == None:
-        pool2average = multiprocessing.Pool(processes=None)
+        pool2average = multiprocessing.Pool(processes=4)
 
     time2map = time.time()
     print 'Start mapping...'
@@ -284,7 +285,7 @@ if __name__ == "__main__":
     Coverages = {0:0}
 
     # add first nodes (can be minL, maxL, avgL, 1, etc.)
-    for i in range(int(maxL)):
+    for i in range(int(r*maxL)):
         updateScores(scores_copied, S, Ep)
     # calculate spread for top-L nodes
     time2Ts = time.time()
@@ -295,9 +296,9 @@ if __name__ == "__main__":
     time2coverage = time.time() - time2Ts
     print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
     with open("plotdata/" + ftime, 'a+') as fp:
-        print >>fp, len(S), time2coverage
+        print >>fp, r, len(S), time2coverage
     with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
-        print >>fp, len(S), time2coverage
+        print >>fp, r, len(S), time2coverage
 
     # find Low and High
     if coverage > T:
@@ -317,9 +318,9 @@ if __name__ == "__main__":
             time2coverage = time.time() - time2Ts
             print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
             with open("plotdata/" + ftime, 'a+') as fp:
-                print >>fp, len(S), time2coverage
+                print >>fp, r, len(S), time2coverage
             with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
-                print >>fp, len(S), time2coverage
+                print >>fp, r, len(S), time2coverage
 
     # find boundary using binary search
     lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
@@ -335,9 +336,9 @@ if __name__ == "__main__":
         time2coverage = time.time() - time2Ts
         print '|S|: %s --> %s nodes | %s sec' %(len(lastS), coverage, time2coverage)
         with open("plotdata/" + ftime, 'a+') as fp:
-            print >>fp, len(S), time2coverage
+            print >>fp, r, len(lastS), time2coverage
         with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
-            print >>fp, len(S), time2coverage
+            print >>fp, r, len(lastS), time2coverage
 
         if coverage < T:
             Low = new_length
@@ -364,13 +365,13 @@ if __name__ == "__main__":
     print "Number of binary steps:", len(Coverages) - 1
     print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
     with open('plotdata/' + FILENAME, 'a+') as fp:
-        print >>fp, T, High
+        print >>fp, r, T, High
     with open(DROPBOX + 'plotdata/' + FILENAME, 'a+') as fp:
-        print >>fp, T, High
-    with open("plotdata/BinaryStepsCCWPmaxL.txt", 'a+') as fp:
-        print >>fp, T, len(Coverages) - 1
-    with open(DROPBOX + "plotdata/BinaryStepsCCWPmaxL.txt", 'a+') as fp:
-        print >>fp, T, len(Coverages) - 1
+        print >>fp, r, T, High
+    with open("plotdata/BinaryStepsCCWPrmaxL_%s.txt" %model, 'a+') as fp:
+        print >>fp, r, T, len(Coverages) - 1
+    with open(DROPBOX + "plotdata/BinaryStepsCCWPrmaxL_%s.txt" %model, 'a+') as fp:
+        print >>fp, r, T, len(Coverages) - 1
 
 
     print 'Finished selecting seed set S in %s sec' %(time.time() - time2select)
