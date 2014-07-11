@@ -160,6 +160,10 @@ def updateS (S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP):
                 if w not in S:
                     IncInf[w] += alpha[(PMIIA[v], w)]*(1 - ap[(w, PMIIA[v])])
 
+def mapAvgSize (args):
+    G, S, Ep, I = args
+    return avgIAC(G, S, Ep, I)
+
 if __name__ == "__main__":
     import time
     start = time.time()
@@ -168,17 +172,28 @@ if __name__ == "__main__":
     print 'Read graph G'
     print time.time() - start
 
+    model = "Random"
+
+    if model == "MultiValency":
+        ep_model = "range"
+    elif model == "Random":
+        ep_model = "random"
+    elif model == "Categories":
+        ep_model = "degree"
+
     Ep = dict()
-    with open("Ep_hep_range1.txt") as f:
+    with open("Ep_hep_%s1.txt" %ep_model) as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
     theta = 1.0/20
-    T = 500
+    T = 3000
+    print "T:", T
     I = 250
+    cpu = multiprocessing.cpu_count()
 
-    model = "Random"
+
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
     FILENAME = "reversePMIA_%s.txt" %model
     ftime = "time2kPMIA_%s.txt" %model
@@ -187,10 +202,9 @@ if __name__ == "__main__":
     pool = None
     Coverages = {0:0}
     coverage = 0
-    def mapAvgSize (S):
-        return avgIAC(G, S, Ep, I)
+
     if pool == None:
-        pool = multiprocessing.Pool(processes=2)
+        pool = multiprocessing.Pool(processes=cpu)
 
     print 'Start Initialization for PMIA...'
     S = []
@@ -218,7 +232,7 @@ if __name__ == "__main__":
     # add first node to S
     updateS(S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP)
     time2Ts = time.time()
-    Ts = pool.map(mapAvgSize, [S]*4)
+    Ts = pool.map(mapAvgSize, ((G, S, Ep, I) for i in range(cpu)))
     coverage = sum(Ts)/len(Ts)
     Coverages[len(S)] = coverage
     time2coverage = time.time() - time2Ts
@@ -238,7 +252,7 @@ if __name__ == "__main__":
         while len(S) < High:
             updateS(S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP)
         time2Ts = time.time()
-        Ts = pool.map(mapAvgSize, [S]*4)
+        Ts = pool.map(mapAvgSize, ((G, S, Ep, I) for i in range(cpu)))
         coverage = sum(Ts)/len(Ts)
         Coverages[len(S)] = coverage
         time2coverage = time.time() - time2Ts
@@ -255,7 +269,7 @@ if __name__ == "__main__":
         new_length = Low + (High - Low)//2
         lastS = S[:new_length]
         time2Ts = time.time()
-        Ts = pool.map(mapAvgSize, [lastS]*4)
+        Ts = pool.map(mapAvgSize, ((G, lastS, Ep, I) for i in range(cpu)))
         coverage = sum(Ts)/len(Ts)
         Coverages[new_length] = coverage
         time2coverage = time.time() - time2Ts

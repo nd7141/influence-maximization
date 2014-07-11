@@ -184,29 +184,43 @@ def frange(begin, end, step):
         yield x
         x += step
 
+def mapAvgSize (args):
+    G, S, Ep, I = args
+    return avgIAC(G, S, Ep, I)
+def mapReverseCCWP (args):
+    G, Ep, T, min_size = args
+    return reverseCCWP(G, Ep, T, min_size)
+
 if __name__ == "__main__":
     start = time.time()
 
-    # read in graph
-    G = nx.Graph()
-    with open('../../graphdata/hep.txt') as f:
-        n, m = f.readline().split()
-        for line in f:
-            u, v = map(int, line.split())
-            try:
-                G[u][v]['weight'] += 1
-            except:
-                G.add_edge(u, v, weight=1)
-    print 'Built graph G'
+    G = nx.read_gpickle("../../graphs/hep.gpickle")
+    print 'Read graph G'
     print time.time() - start
+
+    model = "Categories"
+
+    if model == "MultiValency":
+        ep_model = "range"
+    elif model == "Random":
+        ep_model = "random"
+    elif model == "Categories":
+        ep_model = "degree"
+
+    Ep = dict()
+    with open("Ep_hep_%s1.txt" %ep_model) as f:
+        for line in f:
+            data = line.split()
+            Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
     R = 500
     I = 250
-    T = 2000
+    T = 2500
+    print "T:", T
     r = 1
+    cpu = multiprocessing.cpu_count()
 
     updatef = 1
-    model = "Random"
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
     FILENAME = "reverseCCWPrmaxL_%s.txt" %model
     ftime = "time2kCCWPrmaxL_%s.txt" %model
@@ -218,13 +232,6 @@ if __name__ == "__main__":
 
     length_to_coverage = {0:0}
     norm_parameters = dict()
-
-    # get propagation probabilities
-    Ep = dict()
-    with open("Ep_hep_random1.txt") as f:
-        for line in f:
-            data = line.split()
-            Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
     R2k = [[0, 0]]
 
@@ -241,19 +248,14 @@ if __name__ == "__main__":
     print 'Min size:', min_size
     print 'Finished preprocessing in %s sec' %(time.time() - time2preprocess)
 
-    def mapAvgSize (S):
-        return avgIAC(G, S, Ep, I)
-    def mapReverseCCWP (it):
-        return reverseCCWP(G, Ep, T, min_size)
-        # return getScores(G, Ep, T, min_size)
     if pool2algo == None:
-        pool2algo = multiprocessing.Pool(processes=4)
+        pool2algo = multiprocessing.Pool(processes=cpu)
     if pool2average == None:
-        pool2average = multiprocessing.Pool(processes=4)
+        pool2average = multiprocessing.Pool(processes=cpu)
 
     time2map = time.time()
     print 'Start mapping...'
-    result = pool2algo.map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
+    result = pool2algo.map(mapReverseCCWP, ((G, Ep, T, min_size) for i in range(R))) # result is [(scores1, L1), (scores2, L2), ...]
     # result = map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
     print 'Finished mapping in %s sec' %(time.time() - time2map)
 
@@ -289,7 +291,7 @@ if __name__ == "__main__":
         updateScores(scores_copied, S, Ep)
     # calculate spread for top-L nodes
     time2Ts = time.time()
-    Ts = pool2average.map(mapAvgSize, [S]*4)
+    Ts = pool2average.map(mapAvgSize, ((G, S, Ep, I) for i in range(4)))
     # Ts = map(mapAvgSize, [S]*4)
     coverage = sum(Ts)/len(Ts)
     Coverages[len(S)] = coverage
@@ -311,7 +313,7 @@ if __name__ == "__main__":
             while len(S) < High:
                 updateScores(scores_copied, S, Ep)
             time2Ts = time.time()
-            Ts = pool2average.map(mapAvgSize, [S]*4)
+            Ts = pool2average.map(mapAvgSize, ((G, S, Ep, I) for i in range(4)))
             # Ts = map(mapAvgSize, [S]*4)
             coverage = sum(Ts)/len(Ts)
             Coverages[len(S)] = coverage
@@ -329,7 +331,7 @@ if __name__ == "__main__":
         new_length = Low + (High - Low)//2
         lastS = S[:new_length]
         time2Ts = time.time()
-        Ts = pool2average.map(mapAvgSize, [lastS]*4)
+        Ts = pool2average.map(mapAvgSize, ((G, lastS, Ep, I) for i in range(4)))
         # Ts = map(mapAvgSize, [lastS]*4)
         coverage = sum(Ts)/len(Ts)
         Coverages[new_length] = coverage

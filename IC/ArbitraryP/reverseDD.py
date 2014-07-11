@@ -35,42 +35,52 @@ def updateScores(scores_copied, active, inactive, S, Ep):
             priority = active[v]*(1 + inactive[v])
             scores_copied.add_task(v, -priority)
 
+def mapAvgSize (args):
+    G, S, Ep, I = args
+    return avgIAC(G, S, Ep, I)
 
 if __name__ == '__main__':
     import time
     start = time.time()
 
-    # read in graph
     G = nx.read_gpickle("../../graphs/hep.gpickle")
     print 'Read graph G'
     print time.time() - start
 
-    # get propagation probabilities
+    model = "Random"
+
+    if model == "MultiValency":
+        ep_model = "range"
+    elif model == "Random":
+        ep_model = "random"
+    elif model == "Categories":
+        ep_model = "degree"
+
     Ep = dict()
-    with open("Ep_hep_range1.txt") as f:
+    with open("Ep_hep_%s1.txt" %ep_model) as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
     T = 500
+    print "T:", T
     I = 250
+    cpu = multiprocessing.cpu_count()
 
     length_to_coverage = {0:0}
     norm_parameters = dict()
-    pool = None
+
     Coverages = {0:0}
     coverage = 0
     S = []
 
-    model = "Random"
     DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
     FILENAME = "reverseGDD_%s.txt" %model
     ftime = "time2kGDD_%s.txt" %model
 
-    def mapAvgSize (S):
-        return avgIAC(G, S, Ep, I)
+    pool = None
     if pool == None:
-        pool = multiprocessing.Pool(processes=4)
+        pool = multiprocessing.Pool(processes=cpu)
 
     print "Initializing scores..."
     scores, active, inactive = getScores(G, Ep)
@@ -81,7 +91,7 @@ if __name__ == '__main__':
     # add first node to S
     updateScores(scores_copied, active, inactive, S, Ep)
     time2Ts = time.time()
-    Ts = pool.map(mapAvgSize, [S]*4)
+    Ts = pool.map(mapAvgSize, ((G, S, Ep, I) for i in range(cpu)))
     coverage = sum(Ts)/len(Ts)
     Coverages[len(S)] = coverage
     time2coverage = time.time() - time2Ts
@@ -101,7 +111,7 @@ if __name__ == '__main__':
         while len(S) < High:
             updateScores(scores_copied, active, inactive, S, Ep)
         time2Ts = time.time()
-        Ts = pool.map(mapAvgSize, [S]*4)
+        Ts = pool.map(mapAvgSize, ((G, S, Ep, I) for i in range(cpu)))
         coverage = sum(Ts)/len(Ts)
         Coverages[len(S)] = coverage
         time2coverage = time.time() - time2Ts
@@ -118,7 +128,7 @@ if __name__ == '__main__':
         new_length = Low + (High - Low)//2
         lastS = S[:new_length]
         time2Ts = time.time()
-        Ts = pool.map(mapAvgSize, [lastS]*4)
+        Ts = pool.map(mapAvgSize, ((G, lastS, Ep, I) for i in range(cpu)))
         coverage = sum(Ts)/len(Ts)
         Coverages[new_length] = coverage
         time2coverage = time.time() - time2Ts
