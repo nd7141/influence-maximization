@@ -78,82 +78,98 @@ def frange(begin, end, step):
         yield x
         x += step
 
+def getCoverage((G, S, Ep)):
+    return len(runIAC(G, S, Ep))
+
 if __name__ == '__main__':
     import time
     start = time.time()
 
-    # # read in graph
-    # G = nx.Graph()
-    # with open('../../graphdata/hep.txt') as f:
-    #     n, m = f.readline().split()
-    #     for line in f:
-    #         u, v = map(int, line.split())
-    #         try:
-    #             G[u][v]['weight'] += 1
-    #         except:
-    #             G.add_edge(u,v, weight=1)
-    #         # G.add_edge(u, v, weight=1)
-    # print 'Built graph G'
-    # print time.time() - start
+    model = "Categories"
 
-    G = nx.read_gpickle("../../graphs/hep.gpickle")
+    if model == "MultiValency":
+        ep_model = "range"
+    elif model == "Random":
+        ep_model = "random"
+    elif model == "Categories":
+        ep_model = "degree"
+
+    dataset = "gnu09"
+
+    G = nx.read_gpickle("../../graphs/%s.gpickle" %dataset)
     print 'Read graph G'
     print time.time() - start
 
-    #calculate initial set
-    I = 250
-    DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    # FILENAME = "DirectGDDforDirect6_.txt"
-    FILENAME = "test.txt"
-    ftime = open('plotdata/time' + FILENAME, 'a+')
-    DROPBOXftime = open(DROPBOX + 'plotdata/time' + FILENAME, 'a+')
-
-    # get propagation probabilities
     Ep = dict()
-    with open("Ep_hep_range1.txt") as f:
+    with open("Ep_%s_%s1.txt" %(dataset, ep_model)) as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
+    #calculate initial set
+    I = 1000
+    ALGO_NAME = "GDD"
+    FOLDER = "Data4InfMax"
+    SEEDS_FOLDER = "Seeds"
+    TIME_FOLDER = "Time"
+    DROPBOX_FOLDER = "/home/sergey/Dropbox/Influence Maximization"
+    seeds_filename = SEEDS_FOLDER + "/%s_%s_%s_%s.txt" %(SEEDS_FOLDER, ALGO_NAME, dataset, model)
+    time_filename = TIME_FOLDER + "/%s_%s_%s_%s.txt" %(TIME_FOLDER, ALGO_NAME, dataset, model)
+
+
     length_to_coverage = {0:0}
     l2c = [[0,0]]
     pool = None
-    for length in range(1,2,5):
+    # open file for writing output
+    seeds_file = open(seeds_filename, "a+")
+    time_file = open(time_filename, "a+")
+    dbox_seeds_file = open("%/%", DROPBOX_FOLDER, seeds_filename, "a+")
+    dbox_time_file = open("%/%", DROPBOX_FOLDER, time_filename, "a+")
+    for length in range(1, 250, 5):
 
         time2length = time.time()
 
         print 'Start finding solution for length = %s' %length
         time2S = time.time()
         S = GDD(G, length, Ep)
-        print S
-        print 'Finish finding S in %s sec...' %(time.time() - time2S)
+        time2complete = time.time() - time2S
+        print >>time_file, (time2complete)
+        print >>dbox_time_file, (time2complete)
+        print 'Finish finding S in %s sec...' %(time2complete)
 
-        print 'Start calculating coverage...'
-        def map_AvgIAC (it):
-            return avgIAC(G, S, Ep, I)
+        print 'Writing S to files...'
+        print >>seeds_filename, json.dumps(S)
+        print >>dbox_seeds_file, json.dumps(S)
+
+        # print 'Start calculating coverage...'
+        # def map_AvgIAC (it):
+        #     return avgIAC(G, S, Ep, I)
         # if pool == None:
         #     pool = multiprocessing.Pool(processes=None)
-        avg_size = 0
-        time2avg = time.time()
-        T = map(map_AvgIAC, range(4))
-        # print T
-        avg_size = sum(T)/len(T)
-        print >>ftime, "%s %s" %(length, time.time() - time2S)
-        print >>DROPBOXftime, "%s %s" %(length, time.time() - time2S)
-        print 'Average coverage of %s nodes is %s' %(length, avg_size)
-        print 'Finished calculating coverage in', time.time() - time2avg
-
-        length_to_coverage[length] = avg_size
-        l2c.append([length, avg_size])
-        with open('plotdata/plot' + FILENAME, 'w+') as fp:
-            json.dump(l2c, fp)
-        with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
-            json.dump(l2c, fp)
+        # avg_size = 0
+        # time2avg = time.time()
+        # T = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
+        # # print T
+        # avg_size = sum(T)/len(T)
+        # print >>ftime, "%s %s" %(length, time.time() - time2S)
+        # print >>DROPBOXftime, "%s %s" %(length, time.time() - time2S)
+        # print 'Average coverage of %s nodes is %s' %(length, avg_size)
+        # print 'Finished calculating coverage in', time.time() - time2avg
+        #
+        # length_to_coverage[length] = avg_size
+        # l2c.append([length, avg_size])
+        # with open('plotdata/plot' + FILENAME, 'w+') as fp:
+        #     json.dump(l2c, fp)
+        # with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
+        #     json.dump(l2c, fp)
 
         print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
         print '----------------------------------------------'
 
-    ftime.close()
+    seeds_file.close()
+    dbox_seeds_file.close()
+    time_file.close()
+    dbox_time_file.close()
     print 'Total time: %s' %(time.time() - start)
 
     console = []

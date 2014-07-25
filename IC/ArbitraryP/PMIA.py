@@ -9,6 +9,7 @@ import math
 from copy import deepcopy
 from runIAC import avgIAC
 import multiprocessing, json
+from runIAC import avgIAC, runIAC
 
 def updateAP(ap, S, PMIIAv, PMIIA_MIPv, Ep):
     ''' Assumption: PMIIAv is a directed tree, which is a subgraph of general G.
@@ -188,57 +189,91 @@ def PMIA(G, k, theta, Ep):
 
     return S
 
+def getCoverage((G, S, Ep)):
+    return len(runIAC(G, S, Ep))
+
 if __name__ == "__main__":
     import time
     start = time.time()
 
-    G = nx.read_gpickle("../../graphs/hep.gpickle")
+    model = "Categories"
+
+    if model == "MultiValency":
+        ep_model = "range"
+    elif model == "Random":
+        ep_model = "random"
+    elif model == "Categories":
+        ep_model = "degree"
+
+    dataset = "gnu09"
+
+    G = nx.read_gpickle("../../graphs/%s.gpickle" %dataset)
     print 'Read graph G'
     print time.time() - start
 
     Ep = dict()
-    with open("Ep_hep_degree1.txt") as f:
+    with open("Ep_%s_%s1.txt" %(dataset, ep_model)) as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
-    theta = 1.0/20
-    I = 250
-    DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    FILENAME = "DirectPMIAforDirect6.txt"
-    ftime = open('plotdata/time' + FILENAME, 'a+')
-    l2c = [[0, 0]]
+    ALGO_NAME = "PMIA"
+    FOLDER = "Data4InfMax"
+    SEEDS_FOLDER = "Seeds"
+    TIME_FOLDER = "Time"
+    DROPBOX_FOLDER = "/home/sergey/Dropbox/Influence Maximization"
+    seeds_filename = SEEDS_FOLDER + "/%s_%s_%s_%s.txt" %(SEEDS_FOLDER, ALGO_NAME, dataset, model)
+    time_filename = TIME_FOLDER + "/%s_%s_%s_%s.txt" %(TIME_FOLDER, ALGO_NAME, dataset, model)
 
+    theta = 1.0/20
+    pool = None
+    I = 1000
+    l2c = [[0, 0]]
+    # open file for writing output
+    seeds_file = open(seeds_filename, "a+")
+    time_file = open(time_filename, "a+")
+    dbox_seeds_file = open("%/%", DROPBOX_FOLDER, seeds_filename, "a+")
+    dbox_time_file = open("%/%", DROPBOX_FOLDER, time_filename, "a+")
     for length in range(1, 250, 5):
         time2length = time.time()
         print "Start finding solution for length = %s" %length
 
         time2S = time.time()
         S = PMIA(G, length, theta, Ep)
-        print S
-        print 'Finish finding S in %s sec' %(time.time() - time2S)
+        time2complete = time.time() - time2S
+        print >>time_file, (time2complete)
+        print >>dbox_time_file, (time2complete)
+        print 'Finish finding S in %s sec...' %(time2complete)
 
-        print "Start calculating coverage..."
-        def map_AvgIAC (it):
-            return avgIAC(G, S, Ep, I)
-        # pool = multiprocessing.Pool(processes=None)
-        avg_size = 0
-        time2avg = time.time()
-        T = map(map_AvgIAC, range(4))
-        avg_size = sum(T)/len(T)
-        print 'Average coverage of %s nodes is %s' %(length, avg_size)
-        print 'Finished averaging seed set size in', time.time() - time2avg
-        print >>ftime, "%s %s" %(length, time.time() - time2S)
+        print 'Writing S to files...'
+        print >>seeds_filename, json.dumps(S)
+        print >>dbox_seeds_file, json.dumps(S)
 
-        l2c.append([length, avg_size])
-        with open('plotdata/plot' + FILENAME, 'w+') as fresults:
-            json.dump(l2c, fresults)
-        with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
-            json.dump(l2c, fp)
+        # print "Start calculating coverage..."
+        # # def map_AvgIAC (it):
+        # #     return avgIAC(G, S, Ep, I)
+        # if pool == None:
+        #     pool = multiprocessing.Pool(processes=None)
+        # avg_size = 0
+        # time2avg = time.time()
+        # T = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
+        # avg_size = sum(T)/len(T)
+        # print 'Average coverage of %s nodes is %s' %(length, avg_size)
+        # print 'Finished averaging seed set size in', time.time() - time2avg
+        # print >>ftime, "%s %s" %(length, time.time() - time2S)
+        #
+        # l2c.append([length, avg_size])
+        # with open('plotdata/plot' + FILENAME, 'w+') as fresults:
+        #     json.dump(l2c, fresults)
+        # with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
+        #     json.dump(l2c, fp)
 
         print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
         print '----------------------------------------------'
 
 
-    ftime.close()
+    seeds_file.close()
+    dbox_seeds_file.close()
+    time_file.close()
+    dbox_time_file.close()
     print 'Total time: %s' %(time.time() - start)
