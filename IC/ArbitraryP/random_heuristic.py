@@ -7,6 +7,15 @@ def getSet (G, k):
     S = random.sample(G.nodes(), k)
     return S
 
+def getDegreeS (G, k):
+    from heapq import nlargest
+    d = dict()
+    for u in G:
+        d[u] = sum([G[u][v]["weight"] for v in G[u]])
+    [nodes, _] = zip(*nlargest(k, d.iteritems(), key = lambda (dk,dv): dv))
+    S = list(nodes)
+    return S
+
 def getCoverage((G, S, Ep)):
     return len(runIAC(G, S, Ep))
 
@@ -14,7 +23,9 @@ if __name__ == "__main__":
     import time
     start = time.time()
 
+    dataset = "gnu09"
     model = "Categories"
+    print dataset, model
 
     if model == "MultiValency":
         ep_model = "range"
@@ -22,8 +33,6 @@ if __name__ == "__main__":
         ep_model = "random"
     elif model == "Categories":
         ep_model = "degree"
-
-    dataset = "gnu09"
 
     G = nx.read_gpickle("../../graphs/U%s.gpickle" %dataset)
     print 'Read graph G'
@@ -35,27 +44,43 @@ if __name__ == "__main__":
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
+    #calculate initial set
+    I = 1000
+    ALGO_NAME = "Degree"
+    FOLDER = "Data4InfMax"
+    SEEDS_FOLDER = "Seeds"
+    TIME_FOLDER = "Time"
+    DROPBOX_FOLDER = "/home/sergey/Dropbox/Influence Maximization"
+    seeds_filename = FOLDER + "/" + SEEDS_FOLDER + "/%s_%s_%s_%s.txt" %(SEEDS_FOLDER, ALGO_NAME, dataset, model)
+    time_filename = FOLDER + "/" + TIME_FOLDER + "/%s_%s_%s_%s.txt" %(TIME_FOLDER, ALGO_NAME, dataset, model)
+
+
+    length_to_coverage = {0:0}
+    l2c = [[0,0]]
     pool = None
-    I = 250
-    DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    FILENAME = "DirectRandomfor_%s_%s.txt" %(dataset, model)
-    ftime = open('plotdata/time' + FILENAME, 'a+')
-    l2c = [[0, 0]]
+    for length in range(1, 156, 5):
 
-    for length in range(1, 250, 5):
+        time2length = time.time()
 
-        S = getSet(G, length)
+        print 'Start finding solution for length = %s' %length
+        time2S = time.time()
+        S = getDegreeS(G, length)
+        time2complete = time.time() - time2S
+        with open("%s" %time_filename, "a+") as time_file:
+            print >>time_file, (time2complete)
+        with open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+") as dbox_time_file:
+            print >>dbox_time_file, (time2complete)
+        print 'Finish finding S in %s sec...' %(time2complete)
 
-        if pool == None:
-            pool = multiprocessing.Pool(processes=None)
-        avg_size = 0
-        time2avg = time.time()
-        T = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
-        avg_size = sum(T)/len(T)
-        print "%s: Time to average: %s sec" %(length, time.time() - time2avg)
+        print 'Writing S to files...'
+        with open("%s" %seeds_filename, "a+") as seeds_file:
+            print >>seeds_file, json.dumps(S)
+        with open("%s/%s" %(DROPBOX_FOLDER, seeds_filename), "a+") as dbox_seeds_file:
+            print >>dbox_seeds_file, json.dumps(S)
 
-        l2c.append([length, avg_size])
-        with open('plotdata/plot' + FILENAME, 'w+') as fp:
-            json.dump(l2c, fp)
-        with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
-            json.dump(l2c, fp)
+        print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
+        print '----------------------------------------------'
+
+    print 'Total time: %s' %(time.time() - start)
+
+    console = []
