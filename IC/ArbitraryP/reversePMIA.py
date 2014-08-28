@@ -5,9 +5,9 @@
 
 from __future__ import division
 import networkx as nx
-import math
+import math, time
 from copy import deepcopy
-from runIAC import avgIAC
+from runIAC import *
 import multiprocessing, json
 
 def updateAP(ap, S, PMIIAv, PMIIA_MIPv, Ep):
@@ -160,19 +160,15 @@ def updateS (S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP):
                 if w not in S:
                     IncInf[w] += alpha[(PMIIA[v], w)]*(1 - ap[(w, PMIIA[v])])
 
-def mapAvgSize (args):
-    G, S, Ep, I = args
-    return avgIAC(G, S, Ep, I)
+def getCoverage((G, S, Ep)):
+    return len(runIAC(G, S, Ep))
 
 if __name__ == "__main__":
-    import time
     start = time.time()
 
-    G = nx.read_gpickle("../../graphs/hep.gpickle")
-    print 'Read graph G'
-    print time.time() - start
-
-    model = "Random"
+    dataset = "hep"
+    model = "Categories"
+    print dataset, model
 
     if model == "MultiValency":
         ep_model = "range"
@@ -181,126 +177,111 @@ if __name__ == "__main__":
     elif model == "Categories":
         ep_model = "degree"
 
+    G = nx.read_gpickle("../../graphs/%s.gpickle" %dataset)
+    print 'Read graph G'
+    print time.time() - start
+
     Ep = dict()
-    with open("Ep_hep_%s1.txt" %ep_model) as f:
+    with open("Ep_%s_%s1.txt" %(dataset, ep_model)) as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
-    theta = 1.0/20
-    T = 3000
-    print "T:", T
-    I = 250
-    cpu = multiprocessing.cpu_count()
+    R = 500
+    I = 1000
+    theta = 1/20
+    ALGO_NAME = "PMIA"
+    FOLDER = "Data4InfMax/"
+    REVERSE_FOLDER = "Reverse"
+    STEPS_FOLDER = "Steps"
+    DROPBOX_FOLDER = "/home/sergey/Dropbox/Influence Maximization"
+    reverse_filename = FOLDER + REVERSE_FOLDER + "/%s_%s_%s_%s.txt" %(REVERSE_FOLDER, ALGO_NAME, dataset, model)
+    steps_filename = FOLDER + STEPS_FOLDER + "/%s_%s_%s_%s.txt" %(STEPS_FOLDER, ALGO_NAME, dataset, model)
+    pool = multiprocessing.Pool(processes = 4)
+
+    for T in range(2100, 3000, 100):
+        time2T = time.time()
+        print "T:", T
+        Coverages = {0:0}
+
+        print 'Start Initialization for PMIA...'
+        S = []
+        IncInf = dict(zip(G.nodes(), [0]*len(G)))
+        PMIIA = dict() # node to tree
+        PMIOA = dict()
+        PMIIA_MIP = dict() # node to MIPs (dict)
+        PMIOA_MIP = dict()
+        ap = dict()
+        alpha = dict()
+        IS = dict()
+        for v in G:
+            IS[v] = []
+            PMIIA[v], PMIIA_MIP[v] = computePMIIA(G, IS[v], v, theta, S, Ep)
+            for u in PMIIA[v]:
+                ap[(u, PMIIA[v])] = 0 # ap of u node in PMIIA[v]
+            updateAlpha(alpha, v, S, PMIIA[v], PMIIA_MIP[v], Ep, ap)
+            for u in PMIIA[v]:
+                IncInf[u] += alpha[(PMIIA[v], u)]*(1 - ap[(u, PMIIA[v])])
+        print 'Finished initialization'
 
 
-    DROPBOX = "/home/sergey/Dropbox/Influence Maximization/"
-    FILENAME = "reversePMIA_%s.txt" %model
-    ftime = "time2kPMIA_%s.txt" %model
-
-
-    pool = None
-    Coverages = {0:0}
-    coverage = 0
-
-    if pool == None:
-        pool = multiprocessing.Pool(processes=cpu)
-
-    print 'Start Initialization for PMIA...'
-    S = []
-    IncInf = dict(zip(G.nodes(), [0]*len(G)))
-    PMIIA = dict() # node to tree
-    PMIOA = dict()
-    PMIIA_MIP = dict() # node to MIPs (dict)
-    PMIOA_MIP = dict()
-    ap = dict()
-    alpha = dict()
-    IS = dict()
-    for v in G:
-        IS[v] = []
-        PMIIA[v], PMIIA_MIP[v] = computePMIIA(G, IS[v], v, theta, S, Ep)
-        for u in PMIIA[v]:
-            ap[(u, PMIIA[v])] = 0 # ap of u node in PMIIA[v]
-        updateAlpha(alpha, v, S, PMIIA[v], PMIIA_MIP[v], Ep, ap)
-        for u in PMIIA[v]:
-            IncInf[u] += alpha[(PMIIA[v], u)]*(1 - ap[(u, PMIIA[v])])
-    print 'Finished initialization'
-
-
-    print 'Selecting seed set S...'
-    time2select = time.time()
-    # add first node to S
-    updateS(S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP)
-    time2Ts = time.time()
-    Ts = pool.map(mapAvgSize, ((G, S, Ep, I) for i in range(cpu)))
-    coverage = sum(Ts)/len(Ts)
-    Coverages[len(S)] = coverage
-    time2coverage = time.time() - time2Ts
-    print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
-    with open("plotdata/" + ftime, 'a+') as fp:
-        print >>fp, len(S), time2coverage
-    with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
-        print >>fp, len(S), time2coverage
-
-    Low = 0
-    High = 1
-
-    # find Low and High
-    while coverage < T:
-        Low = len(S)
-        High = 2*Low
-        while len(S) < High:
-            updateS(S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP)
+        print 'Selecting seed set S...'
+        time2select = time.time()
+        # add first node to S
+        updateS(S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP)
         time2Ts = time.time()
-        Ts = pool.map(mapAvgSize, ((G, S, Ep, I) for i in range(cpu)))
+        Ts = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
         coverage = sum(Ts)/len(Ts)
         Coverages[len(S)] = coverage
         time2coverage = time.time() - time2Ts
         print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
-        with open("plotdata/" + ftime, 'a+') as fp:
-            print >>fp, len(S), time2coverage
-        with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
-            print >>fp, len(S), time2coverage
 
-    # find boundary using binary search
-    lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
-    while Low + 1 != High:
-        time2double = time.time()
-        new_length = Low + (High - Low)//2
-        lastS = S[:new_length]
-        time2Ts = time.time()
-        Ts = pool.map(mapAvgSize, ((G, lastS, Ep, I) for i in range(cpu)))
-        coverage = sum(Ts)/len(Ts)
-        Coverages[new_length] = coverage
-        time2coverage = time.time() - time2Ts
-        print '|S|: %s --> %s nodes | %s sec' %(len(lastS), coverage, time2coverage)
-        with open("plotdata/" + ftime, 'a+') as fp:
-            print >>fp, new_length, time2coverage
-        with open(DROPBOX + "plotdata/" + ftime, 'a+') as fp:
-            print >>fp, new_length, time2coverage
+        Low = 0
+        High = 1
 
-        if coverage < T:
-            Low = new_length
-        else:
-            High = new_length
+        # find Low and High
+        while coverage < T:
+            Low = len(S)
+            High = 2*Low
+            while len(S) < High:
+                updateS(S, IncInf, alpha, ap, IS, PMIOA_MIP, PMIIA_MIP)
+            time2Ts = time.time()
+            Ts = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
+            coverage = sum(Ts)/len(Ts)
+            Coverages[len(S)] = coverage
+            time2coverage = time.time() - time2Ts
+            print '|S|: %s --> %s nodes | %s sec' %(len(S), coverage, time2coverage)
 
-    assert Coverages[Low] < T
-    assert Coverages[High] >= T
-    finalS = S[:High]
+        # find boundary using binary search
+        lastS = deepcopy(S) # S gives us solution for k = 1..len(S)
+        while Low + 1 != High:
+            time2double = time.time()
+            new_length = Low + (High - Low)//2
+            lastS = S[:new_length]
+            time2Ts = time.time()
+            Ts = pool.map(getCoverage, ((G, lastS, Ep) for i in range(I)))
+            coverage = sum(Ts)/len(Ts)
+            Coverages[new_length] = coverage
+            time2coverage = time.time() - time2Ts
+            print '|S|: %s --> %s nodes | %s sec' %(len(lastS), coverage, time2coverage)
 
-    print 'Finished selecting seed set S: %s sec' %(time.time() - time2select)
-    # with open("plotdata/timeReverseDDforReverse3.txt", "w+") as fp:
-    #     fp.write("%s" %(time.time() - time2select))
-    print 'Coverage: ', Coverages[len(finalS)]
-    print finalS
-    print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
-    with open('plotdata/' + FILENAME, 'a+') as fp:
-        print >>fp, T, High
-    with open(DROPBOX + 'plotdata/' + FILENAME, 'a+') as fp:
-        print >>fp, T, High
-    with open("plotdata/BinaryStepsPMIA_%s.txt" %model, 'a+') as fp:
-        print >>fp, T, len(Coverages) - 1
-    with open(DROPBOX + "plotdata/BinaryStepsPMIA_%s.txt" %model, 'a+') as fp:
-        print >>fp, T, len(Coverages) - 1
+            if coverage < T:
+                Low = new_length
+            else:
+                High = new_length
+
+        assert Coverages[Low] < T
+        assert Coverages[High] >= T
+        finalS = S[:High]
+
+        print 'Finished selecting seed set S: %s sec' %(time.time() - time2select)
+        with open(steps_filename, 'a+') as fp:
+                print >>fp, T, len(Coverages) - 1
+        print 'Necessary %s initial nodes to target %s nodes in graph G' %(len(finalS), T)
+        with open(reverse_filename, 'a+') as fp:
+                print >>fp, T, High
+
+        print 'Finished seed minimization for T = %s in %s sec' %(T, time.time() - time2T)
+        print '----------------------------------------------'
 
     print 'Total time: %s' %(time.time() - start)

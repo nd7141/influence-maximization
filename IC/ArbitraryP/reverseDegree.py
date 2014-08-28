@@ -1,44 +1,22 @@
+''' Implementation of Degree heuristic.
+'''
+
 from __future__ import division
 import networkx as nx
-from DD import DD
+import math, time
+from copy import deepcopy
 from runIAC import *
-import os, json, math, operator, multiprocessing, time
-from priorityQueue import PriorityQueue as PQ
-from pprint import pprint
+import multiprocessing, json
 
-def getScores(G, Ep):
-    '''Finds scores for GDD.
-    Scores are degree for each node.
-    '''
-
-    scores = PQ() # degree discount
-    active = dict()
-    inactive = dict()
-
-    # initialize degree discount
-    for u in G:
-        active[u] = 1
-        # inactive[u] = sum([Ep[(u,v)]*G[u][v]['weight'] for v in G[u]])
-        inactive[u] = sum([1 - (1 - Ep[(u,v)])**G[u][v]["weight"] for v in G[u]])
-        priority = active[u]*(1 + inactive[u])
-        scores.add_task(u, -priority) # add degree of each node
-
-    return scores, active, inactive
-
-def updateScores(scores_copied, active, inactive, S, Ep):
-    u, priority = scores_copied.pop_item() # extract node with maximal degree discount
+def updateS (S, d):
+    u, _ = max(d.iteritems(), key = lambda (dk, dv): dv)
     S.append(u)
-    for v in G[u]:
-        if v not in S:
-            active[v] *= (1-Ep[(u,v)])**G[u][v]['weight']
-            inactive[v] -= 1 - (1 - Ep[(u,v)])**G[u][v]['weight']
-            priority = active[v]*(1 + inactive[v])
-            scores_copied.add_task(v, -priority)
+    d.pop(u)
 
 def getCoverage((G, S, Ep)):
     return len(runIAC(G, S, Ep))
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     start = time.time()
 
     dataset = "hep"
@@ -64,7 +42,7 @@ if __name__ == '__main__':
 
     R = 500
     I = 1000
-    ALGO_NAME = "GDD"
+    ALGO_NAME = "Degree"
     FOLDER = "Data4InfMax/"
     REVERSE_FOLDER = "Reverse"
     STEPS_FOLDER = "Steps"
@@ -76,18 +54,20 @@ if __name__ == '__main__':
     for T in range(2100, 3000, 100):
         time2T = time.time()
         print "T:", T
-
         Coverages = {0:0}
-        S = []
 
-        print "Initializing scores..."
-        scores, active, inactive = getScores(G, Ep)
-        scores_copied = deepcopy(scores)
+        print 'Start Initialization for Degree...'
+        S = []
+        d = dict()
+        for u in G:
+            d[u] = sum([G[u][v]["weight"] for v in G[u]])
+        print 'Finished initialization'
+
 
         print 'Selecting seed set S...'
         time2select = time.time()
         # add first node to S
-        updateScores(scores_copied, active, inactive, S, Ep)
+        updateS(S, d)
         time2Ts = time.time()
         Ts = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
         coverage = sum(Ts)/len(Ts)
@@ -103,7 +83,7 @@ if __name__ == '__main__':
             Low = len(S)
             High = 2*Low
             while len(S) < High:
-                updateScores(scores_copied, active, inactive, S, Ep)
+                updateS(S, d)
             time2Ts = time.time()
             Ts = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
             coverage = sum(Ts)/len(Ts)
@@ -143,5 +123,4 @@ if __name__ == '__main__':
         print 'Finished seed minimization for T = %s in %s sec' %(T, time.time() - time2T)
         print '----------------------------------------------'
 
-    print 'Total time:', time.time() - start
-    console = []
+    print 'Total time: %s' %(time.time() - start)
