@@ -215,7 +215,7 @@ if __name__ == "__main__":
 
     R = 500
     I = 250
-    T = 2500
+    T = 3000
     print "T:", T
     r = 1
     cpu = multiprocessing.cpu_count()
@@ -254,7 +254,7 @@ if __name__ == "__main__":
         pool2average = multiprocessing.Pool(processes=cpu)
 
     time2map = time.time()
-    print 'Start mapping...'
+    print 'Start mappi      ng...'
     result = pool2algo.map(mapReverseCCWP, ((G, Ep, T, min_size) for i in range(R))) # result is [(scores1, L1), (scores2, L2), ...]
     # result = map(mapReverseCCWP, range(R)) # result is [(scores1, L1), (scores2, L2), ...]
     print 'Finished mapping in %s sec' %(time.time() - time2map)
