@@ -10,10 +10,33 @@ from copy import deepcopy
 import os, json, multiprocessing, random
 from runIAC import *
 
-def findCC(G, Ep):
+def weighted_choice(choices):
+    '''
+    http://stackoverflow.com/a/3679747/2069858'''
+    total = sum(w for c, w in choices)
+    r = random.uniform(0, total)
+    upto = 0
+    for c, w in choices:
+        if upto + w > r:
+            return c
+        upto += w
+    assert False, "Shouldn't get here"
+
+def findCC(G, Ep, cascade = "IC"):
+    '''
+    G is undirected graph
+    '''
+
     # remove blocked edges from graph G
     E = deepcopy(G)
-    edge_rem = [e for e in E.edges() if random.random() < (1-Ep[e])**(E[e[0]][e[1]]['weight'])]
+    if cascade == "IC":
+        edge_rem = [e for e in E.edges() if random.random() < (1-Ep[e])**(E[e[0]][e[1]]['weight'])]
+    elif cascade == "LT":
+        for u in G:
+            W = [Ep[e] for e in G.edges(u)]
+            choices = zip(G.edges(u), W)
+            live_edge = weighted_choice(choices)
+
     E.remove_edges_from(edge_rem)
 
     # initialize CC
@@ -53,8 +76,6 @@ def CCWP((G, k, Ep)):
     QN = sum([l for (l, _) in topCCnumbers]) # number of qualified nodes
 
     increment = 0
-    # add ties of rank k (if len of kth CC == 1 then add all CCs)
-    #TODO find how it can be IndexError (case study: fb MultiValency k = 186)
     try:
         while k+increment < len(sortedCC) and sortedCC[k + increment][0] == sortedCC[k-1][0]:
             topCCnumbers.append(sortedCC[k + increment])
@@ -71,19 +92,38 @@ def CCWP((G, k, Ep)):
             prev_length = length
             rank += 1
         weighted_score = 1.0/length # updatef = 1
-        # weighted_score = 1 # updatef = 2
-        # weighted_score = length # updatef = 3
-        # weighted_score = 1.0/length**.5 # updatef = 4
-        # weighted_score = 1.0/length**2  # updatef = 5
-        # weighted_score = QCC/length # updatef = 6
-        # weighted_score = 1.0/(length*QCC) # updatef = 7
-        # weighted_score = 1.0/(1 - (1 - length)*(1 - rank)/(1 - k)) # updatef = 8
-        # weighted_score = 1 - (length - 1)*(1 - rank)/(length*(1 - k)) # updatef = 9
-        # weighted_score = 1/QN #updatef = 10
         for node in CC[numberCC]:
             scores[node] += weighted_score
     return scores
-# TODO reduce number of binary steps by changing between binary and incremental search
+
+def CCWP_directed((G, Ep)):
+    '''
+    Implements Harvester for directed graphs
+    Model: IC
+    '''
+
+    # remove blocked edges
+    E = deepcopy(G)
+    edge_rem = [edge for edge in E.edges() if random.random() < (1-Ep[edge])**(E[edge[0]][edge[1]]['weight'])]
+    E.remove_edges_from(edge_rem)
+
+    # find score for each node
+    scores = dict(zip(E.nodes(), [0]*len(E)))
+    for node in E:
+        reachable_nodes = [node]
+        # Do BFS
+        out_edges = E.out_edges(node)
+        i = 0
+        while i < len(out_edges):
+            e = out_edges[i]
+            if e[1] not in reachable_nodes:
+                reachable_nodes.append(e[1])
+                out_edges.extend(E.out_edges(e[1]))
+            i += 1
+        scores[node] = len(reachable_nodes)
+
+    return scores
+
 def frange(begin, end, step):
     x = begin
     y = end
@@ -99,38 +139,38 @@ if __name__ == '__main__':
     import time
     start = time.time()
 
+    dataset = "gnu09"
     model = "MultiValency"
-    print model
+    print model, dataset
 
     if model == "MultiValency":
-        ep_model = "range"
+        ep_model = "range1_directed"
     elif model == "Random":
-        ep_model = "random"
+        ep_model = "random1_directed"
     elif model == "Categories":
-        ep_model = "degree"
-
-    dataset = "gnu09"
+        ep_model = "degree1_directed"
 
     G = nx.read_gpickle("../../graphs/%s.gpickle" %dataset)
     print 'Read graph G'
     print time.time() - start
 
     Ep = dict()
-    with open("Ep_%s_%s1.txt" %(dataset, ep_model)) as f:
+    with open("Ep_%s_%s.txt" %(dataset, ep_model)) as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
     #calculate initial set
-    R = 500
-    I = 1000
+    R = 200
+    I = 500
     ALGO_NAME = "CCWP"
     FOLDER = "Data4InfMax"
     SEEDS_FOLDER = "Seeds"
     TIME_FOLDER = "Time"
     DROPBOX_FOLDER = "/home/sergey/Dropbox/Influence Maximization"
-    seeds_filename = SEEDS_FOLDER + "/%s_%s_%s_%s.txt" %(SEEDS_FOLDER, ALGO_NAME, dataset, model)
-    time_filename = TIME_FOLDER + "/%s_%s_%s_%s.txt" %(TIME_FOLDER, ALGO_NAME, dataset, model)
+    # seeds_filename = FOLDER + "/" + SEEDS_FOLDER + "/%s_%s_%s_%s.txt" %(SEEDS_FOLDER, ALGO_NAME, dataset, model)
+    seeds_filename = FOLDER + "/" + SEEDS_FOLDER + "/%s_%s_%s_%s_directed.txt" %(SEEDS_FOLDER, ALGO_NAME, dataset, model)
+    time_filename = FOLDER + "/" + TIME_FOLDER + "/%s_%s_%s_%s.txt" %(TIME_FOLDER, ALGO_NAME, dataset, model)
     logfile = open('log.txt', 'w+')
     # print >>logfile, '--------------------------------'
     # print >>logfile, time.strftime("%c")
@@ -139,11 +179,11 @@ if __name__ == '__main__':
     pool = None
     pool2 = None
     # open file for writing output
-    seeds_file = open(seeds_filename, "a+")
-    time_file = open(time_filename, "a+")
-    dbox_seeds_file = open("%/%", DROPBOX_FOLDER, seeds_filename, "a+")
-    dbox_time_file = open("%/%", DROPBOX_FOLDER, time_filename, "a+")
-    for length in range(1, 250, 5):
+    seeds_file = open("%s" %seeds_filename, "a+")
+    time_file = open("%s" %time_filename, "a+")
+    dbox_seeds_file = open("%s/%s" %(DROPBOX_FOLDER, seeds_filename), "a+")
+    dbox_time_file = open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+")
+    for length in range(1, 152, 10):
         time2length = time.time()
         print 'Start finding solution for length = %s' %length
         print >>logfile, 'Start finding solution for length = %s' %length
@@ -155,8 +195,8 @@ if __name__ == '__main__':
         # def map_CCWP(it):
         #     return CCWP(G, length, Ep)
         if pool == None:
-            pool = multiprocessing.Pool(processes=None)
-        Scores = pool.map(CCWP, ((G, length, Ep) for i in range(R)))
+            pool = multiprocessing.Pool(processes=4)
+        Scores = pool.map(CCWP_directed, ((G, Ep) for i in range(R)))
         # print 'Finished mapping in', time.time() - time2map
 
         print 'Start reducing...'
@@ -177,31 +217,22 @@ if __name__ == '__main__':
                     scores_copied[v] = penalty*scores_copied[v]
         print >>logfile, json.dumps(S)
         time2complete = time.time() - time2S
-        print >>time_file, (time2complete)
-        print >>dbox_time_file, (time2complete)
+        # with open("%s" %time_filename, "a+") as time_file:
+        #     print >>time_file, (time2complete)
+        # with open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+") as dbox_time_file:
+        #     print >>dbox_time_file, (time2complete)
         print 'Finish finding S in %s sec...' %(time2complete)
 
         print 'Writing S to files...'
-        print >>seeds_filename, json.dumps(S)
-        print >>dbox_seeds_file, json.dumps(S)
+        with open("%s" %seeds_filename, "a+") as seeds_file:
+            print >>seeds_file, json.dumps(S)
+        # with open("%s/%s" %(DROPBOX_FOLDER, seeds_filename), "a+") as dbox_seeds_file:
+        #     print >>dbox_seeds_file, json.dumps(S)
 
         # print 'Start calculating coverage...'
-        # def map_AvgIAC (it):
-        #     return avgIAC(G, S, Ep, I)
-        # # if pool2 == None:
-        # #     pool2 = multiprocessing.Pool(processes=None)
-        # avg_size = 0
-        # time2avg = time.time()
-        # Ts = pool.map(getCoverage, ((G, S, Ep) for i in range(I)))
-        # avg_size = sum(Ts)/len(Ts)
-        # print 'Average coverage of %s nodes is %s' %(length, avg_size)
-        # print 'Finished averaging seed set size in', time.time() - time2avg
-        #
-        # l2c.append([length, avg_size])
-        # with open('plotdata/plot' + FILENAME, 'w+') as fp:
-        #     json.dump(l2c, fp)
-        # with open(DROPBOX + 'plotdata/plot' + FILENAME, 'w+') as fp:
-        #     json.dump(l2c, fp)
+        # coverage = sum(pool.map(getCoverage, ((G, S, Ep) for _ in range(I))))/I
+        # print 'S:', S
+        # print 'Coverage', coverage
 
         print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
         print '----------------------------------------------'
