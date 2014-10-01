@@ -96,7 +96,7 @@ def CCWP((G, k, Ep)):
             scores[node] += weighted_score
     return scores
 
-def CCWP_directed((G, Ep)):
+def CCWP_directed((G, k, Ep)):
     '''
     Implements Harvester for directed graphs
     Model: IC
@@ -109,8 +109,10 @@ def CCWP_directed((G, Ep)):
 
     # find score for each node
     scores = dict(zip(E.nodes(), [0]*len(E)))
+    reachability = dict()
     for node in E:
         reachable_nodes = [node]
+
         # Do BFS
         out_edges = E.out_edges(node)
         i = 0
@@ -120,9 +122,31 @@ def CCWP_directed((G, Ep)):
                 reachable_nodes.append(e[1])
                 out_edges.extend(E.out_edges(e[1]))
             i += 1
+        reachability[node] = reachable_nodes
         scores[node] = len(reachable_nodes)
 
-    return scores
+    # enhance scores
+    enhanced_scores = dict(zip(E.nodes(), [0]*len(E))) # resulted scores
+    sorted_scores = sorted(scores.iteritems(), key = lambda (dk, dv): dv)
+    reached_nodes = []
+
+    already_selected = 0
+    last_score = 0
+    for node, score in sorted_scores:
+        if already_selected <= k:
+            if node not in reached_nodes:
+                enhanced_scores[node] = score
+                reached_nodes.extend(reachability[node])
+                last_score = score
+        else:
+            if score == last_score:
+                if node not in reached_nodes:
+                    enhanced_scores[node] = score
+                    reached_nodes.extend(reachability[node])
+            else:
+                break
+
+    return enhanced_scores
 
 def frange(begin, end, step):
     x = begin
@@ -133,7 +157,6 @@ def frange(begin, end, step):
 
 def getCoverage((G, S, Ep)):
     return len(runIAC(G, S, Ep))
-
 
 if __name__ == '__main__':
     import time
@@ -183,7 +206,7 @@ if __name__ == '__main__':
     time_file = open("%s" %time_filename, "a+")
     dbox_seeds_file = open("%s/%s" %(DROPBOX_FOLDER, seeds_filename), "a+")
     dbox_time_file = open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+")
-    for length in range(1, 152, 10):
+    for length in range(151, 152, 10):
         time2length = time.time()
         print 'Start finding solution for length = %s' %length
         print >>logfile, 'Start finding solution for length = %s' %length
@@ -195,8 +218,8 @@ if __name__ == '__main__':
         # def map_CCWP(it):
         #     return CCWP(G, length, Ep)
         if pool == None:
-            pool = multiprocessing.Pool(processes=4)
-        Scores = pool.map(CCWP_directed, ((G, Ep) for i in range(R)))
+            pool = multiprocessing.Pool(processes=2)
+        Scores = pool.map(CCWP_directed, ((G, length, Ep) for i in range(R)))
         # print 'Finished mapping in', time.time() - time2map
 
         print 'Start reducing...'
@@ -215,7 +238,10 @@ if __name__ == '__main__':
                     # print weight,
                     penalty = (1-Ep[(maxk, v)])**(G[maxk][v]['weight'])
                     scores_copied[v] = penalty*scores_copied[v]
-        print >>logfile, json.dumps(S)
+
+        print S
+        print avgIAC(G, S, Ep, 500)
+        # print >>logfile, json.dumps(S)
         time2complete = time.time() - time2S
         # with open("%s" %time_filename, "a+") as time_file:
         #     print >>time_file, (time2complete)
@@ -223,9 +249,9 @@ if __name__ == '__main__':
         #     print >>dbox_time_file, (time2complete)
         print 'Finish finding S in %s sec...' %(time2complete)
 
-        print 'Writing S to files...'
-        with open("%s" %seeds_filename, "a+") as seeds_file:
-            print >>seeds_file, json.dumps(S)
+        # print 'Writing S to files...'
+        # with open("%s" %seeds_filename, "a+") as seeds_file:
+        #     print >>seeds_file, json.dumps(S)
         # with open("%s/%s" %(DROPBOX_FOLDER, seeds_filename), "a+") as dbox_seeds_file:
         #     print >>dbox_seeds_file, json.dumps(S)
 
