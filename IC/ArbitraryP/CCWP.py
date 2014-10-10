@@ -6,9 +6,10 @@ CCWP heuristic for arbitrary propagation probabilities.
 from __future__ import division
 import networkx as nx
 from heapq import nlargest
-from copy import deepcopy
+from copy import deepcopy, copy
 import os, json, multiprocessing, random
 from runIAC import *
+from pprint import pprint
 
 def weighted_choice(choices):
     '''
@@ -103,16 +104,23 @@ def CCWP_directed((G, k, Ep)):
     '''
 
     # remove blocked edges
-    E = deepcopy(G)
+    time2create = time.time()
+    # E = deepcopy(G)
+    E = G
     edge_rem = [edge for edge in E.edges() if random.random() < (1-Ep[edge])**(E[edge[0]][edge[1]]['weight'])]
     E.remove_edges_from(edge_rem)
+    # print time.time() - time2create
 
+    time2bfs = time.time()
+    # Can be optimized using a heap
     # find score for each node
     scores = dict(zip(E.nodes(), [0]*len(E)))
     reachability = dict()
+    min_top_score = -1
+    top_nodes = []
+    current_length = 0
     for node in E:
         reachable_nodes = [node]
-
         # Do BFS
         out_edges = E.out_edges(node)
         i = 0
@@ -123,30 +131,105 @@ def CCWP_directed((G, k, Ep)):
                 out_edges.extend(E.out_edges(e[1]))
             i += 1
         reachability[node] = reachable_nodes
-        scores[node] = len(reachable_nodes)
+        score = len(reachable_nodes)
 
+        # maintain a list of k+ties top nodes
+
+        scores[node] = score
+
+    # print 'bfs:', time.time() - time2bfs
+    time2select = time.time()
     # enhance scores
-    enhanced_scores = dict(zip(E.nodes(), [0]*len(E))) # resulted scores
-    sorted_scores = sorted(scores.iteritems(), key = lambda (dk, dv): dv)
-    reached_nodes = []
+    # enhanced_scores = dict(zip(E.nodes(), [0]*len(E))) # resulted scores
+    enhanced_scores = dict()
+    sorted_scores = sorted(scores.iteritems(), key = lambda (dk, dv): dv, reverse=True)
+    reached_nodes = dict(zip(E.nodes(), [False]*len(E)))
 
     already_selected = 0
     last_score = 0
     for node, score in sorted_scores:
         if already_selected <= k:
-            if node not in reached_nodes:
+            if not reached_nodes[node]:
                 enhanced_scores[node] = score
-                reached_nodes.extend(reachability[node])
+                reached_nodes.update(dict(zip(reachability[node], [True]*len(reachability[node]))))
                 last_score = score
+                already_selected += 1
         else:
             if score == last_score:
-                if node not in reached_nodes:
+                if not reached_nodes[node]:
                     enhanced_scores[node] = score
-                    reached_nodes.extend(reachability[node])
+                    reached_nodes.update(dict(zip(reachability[node], [True]*len(reachability[node]))))
             else:
                 break
-
+    # print 'select:', time.time() - time2select
+    print sorted(enhanced_scores.values(), reverse=True)[:k]
     return enhanced_scores
+
+def CCWP_test((G, k, Ep)):
+    '''
+    Implements Harvester for directed graphs
+    Model: IC
+    '''
+    # TODO find why CCWP_test and CCWP_directed produce different reach 
+    # create live-edge graph
+    time2create = time.time()
+    if type(G) == type(nx.DiGraph()):
+        E = nx.DiGraph()
+    else:
+        E = nx.Graph()
+    E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
+    live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
+    E.add_edges_from(live_edges)
+    print time.time() - time2create
+
+    # find CCs and perform topological sort on clusters to find reachability
+    n2c = dict() # nodes to components
+    c2n = dict() # component to nodes
+    reachability = dict(zip(E.nodes(), [1]*len(E))) # number of nodes can be reached by a node
+
+
+    # find CCs
+    scc = nx.strongly_connected_components(E)
+    number_scc = -1
+    for component in scc:
+        number_scc += 1
+        c2n[number_scc] = component
+        n2c.update(dict(zip(component, [number_scc]*len(component))))
+
+    # create dags with components as nodes
+    clusters = nx.DiGraph()
+    for node in E:
+        for out_node in E[node]:
+            if n2c[node] != n2c[out_node]:
+                clusters.add_edge(n2c[node], n2c[out_node])
+
+    # find reachability performing topological sort
+    wccs = nx.weakly_connected_component_subgraphs(clusters)
+    i = -1
+    for wc in wccs:
+        print len(wc)
+    for hub in wccs:
+        hub_ts = nx.topological_sort(hub, reverse=True)
+        reach = 0
+        for cluster in hub_ts:
+            reach += len(c2n[cluster])
+            reachability.update(dict(zip(c2n[cluster], [reach]*len(c2n[cluster]))))
+
+    # assign scores to k+ties nodes
+    sorted_reach = sorted(reachability.iteritems(), key= lambda (dk,dv): dv, reverse=True)
+    scores = dict(sorted_reach[:k])
+    min_value = sorted_reach[k-1][1]
+    new_idx = k
+    new_value = sorted_reach[k][1]
+    while new_value == min_value:
+        try:
+            scores[sorted_reach[new_idx][0]] = min_value
+        except IndexError:
+            break
+        new_idx += 1
+
+    print sorted(scores.values(), reverse=True)[:k]
+    return scores
 
 def frange(begin, end, step):
     x = begin
@@ -163,7 +246,7 @@ if __name__ == '__main__':
     start = time.time()
 
     dataset = "gnu09"
-    model = "MultiValency"
+    model = "Categories"
     print model, dataset
 
     if model == "MultiValency":
@@ -172,19 +255,24 @@ if __name__ == '__main__':
         ep_model = "random1_directed"
     elif model == "Categories":
         ep_model = "degree1_directed"
+    elif model == "Weighted":
+        ep_model = "weighted1_directed"
+    elif model == "Uniform":
+        ep_model = "uniform1_directed"
 
     G = nx.read_gpickle("../../graphs/%s.gpickle" %dataset)
     print 'Read graph G'
     print time.time() - start
+    print len(G), len(G.edges())
 
     Ep = dict()
-    with open("Ep_%s_%s.txt" %(dataset, ep_model)) as f:
+    with open("Ep/Ep_%s_%s.txt" %(dataset, ep_model)) as f:
         for line in f:
             data = line.split()
             Ep[(int(data[0]), int(data[1]))] = float(data[2])
 
     #calculate initial set
-    R = 200
+    R = 1
     I = 500
     ALGO_NAME = "CCWP"
     FOLDER = "Data4InfMax"
@@ -206,7 +294,7 @@ if __name__ == '__main__':
     time_file = open("%s" %time_filename, "a+")
     dbox_seeds_file = open("%s/%s" %(DROPBOX_FOLDER, seeds_filename), "a+")
     dbox_time_file = open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+")
-    for length in range(151, 152, 10):
+    for length in range(3, 4, 10):
         time2length = time.time()
         print 'Start finding solution for length = %s' %length
         print >>logfile, 'Start finding solution for length = %s' %length
@@ -218,36 +306,47 @@ if __name__ == '__main__':
         # def map_CCWP(it):
         #     return CCWP(G, length, Ep)
         if pool == None:
-            pool = multiprocessing.Pool(processes=2)
-        Scores = pool.map(CCWP_directed, ((G, length, Ep) for i in range(R)))
-        # print 'Finished mapping in', time.time() - time2map
+            pool = multiprocessing.Pool(processes=3)
+        Scores = pool.map(CCWP_test, ((G, length, Ep) for i in range(R)))
+        # print Scores
+        print 'Finished mapping in', time.time() - time2map
 
-        print 'Start reducing...'
-        time2reduce = time.time()
-        scores = {v: sum([s[v] for s in Scores]) for v in G}
-        scores_copied = deepcopy(scores)
-        S = []
-        # penalization phase
-        for it in range(length):
-            maxk, maxv = max(scores_copied.iteritems(), key = lambda (dk, dv): dv)
-            S.append(maxk)
-            scores_copied.pop(maxk) # remove top element from dict
-            for v in G[maxk]:
-                if v not in S:
-                    # weight = scores_copied[v]/maxv
-                    # print weight,
-                    penalty = (1-Ep[(maxk, v)])**(G[maxk][v]['weight'])
-                    scores_copied[v] = penalty*scores_copied[v]
-
-        print S
-        print avgIAC(G, S, Ep, 500)
-        # print >>logfile, json.dumps(S)
-        time2complete = time.time() - time2S
-        # with open("%s" %time_filename, "a+") as time_file:
-        #     print >>time_file, (time2complete)
-        # with open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+") as dbox_time_file:
-        #     print >>dbox_time_file, (time2complete)
-        print 'Finish finding S in %s sec...' %(time2complete)
+        # print 'Start reducing...'
+        # time2reduce = time.time()
+        #
+        # scores = dict()
+        # for Score in Scores:
+        #     for node in Score:
+        #         try:
+        #             scores[node] += Score[node]
+        #         except KeyError:
+        #             scores[node] = Score[node]
+        # scores_copied = deepcopy(scores)
+        # S = []
+        # # penalization phase
+        # for it in range(length):
+        #     maxk, maxv = max(scores_copied.iteritems(), key = lambda (dk, dv): dv)
+        #     S.append(maxk)
+        #     scores_copied.pop(maxk) # remove top element from dict
+        #     for v in G[maxk]:
+        #         if v not in S and v in scores_copied:
+        #             # weight = scores_copied[v]/maxv
+        #             # print weight,
+        #             penalty = (1-Ep[(maxk, v)])**(G[maxk][v]['weight'])
+        #             scores_copied[v] *= penalty
+        # print 'Finished reducing in', time.time() - time2reduce
+        #
+        # print 'Total:', time.time() - start
+        #
+        # print S
+        # print avgIAC(G, S, Ep, 500)
+        # # print >>logfile, json.dumps(S)
+        # time2complete = time.time() - time2S
+        # # with open("%s" %time_filename, "a+") as time_file:
+        # #     print >>time_file, (time2complete)
+        # # with open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+") as dbox_time_file:
+        # #     print >>dbox_time_file, (time2complete)
+        # print 'Finish finding S in %s sec...' %(time2complete)
 
         # print 'Writing S to files...'
         # with open("%s" %seeds_filename, "a+") as seeds_file:
@@ -260,15 +359,33 @@ if __name__ == '__main__':
         # print 'S:', S
         # print 'Coverage', coverage
 
-        print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
-        print '----------------------------------------------'
+        # print 'Total time for length = %s: %s sec' %(length, time.time() - time2length)
+        # print '----------------------------------------------'
 
-    seeds_file.close()
-    dbox_seeds_file.close()
-    time_file.close()
-    dbox_time_file.close()
-    logfile.close()
+    # seeds_file.close()
+    # dbox_seeds_file.close()
+    # time_file.close()
+    # dbox_time_file.close()
+    # logfile.close()
 
-    print 'Total time: %s' %(time.time() - start)
+    # Q = nx.DiGraph()
+    # Q.add_path([1,2,3,4])
+    # Q.add_edge(3,1)
+    # Q.add_nodes_from([5,6])
+    # Q.add_edge(7,8)
+    #
+    # start = time.time()
+    # reachability_test = CCWP_test((G, 2, Ep))
+    # print reachability_test
+    # print 'test:', time.time() - start
+
+    # start = time.time()
+    # reachability_bench = CCWP_directed((G, 2, Ep))
+    # reachability_test = CCWP_test((G, 10, Ep))
+    # print reachability_test
+    # print 'benchmark:', time.time() - start
+
+
+    # print 'Total time: %s' %(time.time() - start)
 
     console = []
