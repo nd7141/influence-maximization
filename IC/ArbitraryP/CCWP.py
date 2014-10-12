@@ -104,14 +104,14 @@ def CCWP_directed((G, k, Ep)):
     '''
 
     # add live edges
-    # if isinstance(G, nx.DiGraph):
-    #     E = nx.DiGraph()
-    # elif isinstance(G, nx.Graph):
-    #     E = nx.Graph()
-    # E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
-    # live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
-    # E.add_edges_from(live_edges)
-    E = G
+    if isinstance(G, nx.DiGraph):
+        E = nx.DiGraph()
+    elif isinstance(G, nx.Graph):
+        E = nx.Graph()
+    E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
+    live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
+    E.add_edges_from(live_edges)
+    # E = G
 
     # Can be optimized using a heap
     # find score for each node
@@ -164,14 +164,14 @@ def CCWP_test((G, k, Ep)):
     '''
 
     # create live-edge graph
-    # if isinstance(G, nx.DiGraph):
-    #     E = nx.DiGraph()
-    # elif isinstance(G, nx.Graph):
-    #     E = nx.Graph()
-    # E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
-    # live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
-    # E.add_edges_from(live_edges)
-    E = G
+    if isinstance(G, nx.DiGraph):
+        E = nx.DiGraph()
+    elif isinstance(G, nx.Graph):
+        E = nx.Graph()
+    E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
+    live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
+    E.add_edges_from(live_edges)
+    # E = G
 
     # find CCs and perform topological sort on clusters to find reach
     n2c = dict() # nodes to components
@@ -204,12 +204,16 @@ def CCWP_test((G, k, Ep)):
     for hub in wccs:
         hub_ts = nx.topological_sort(hub, reverse=True)
         for cluster in hub_ts:
-            reach = 0
+            # reach = set()
+            reach = []
             for _, out_cluster in clusters.out_edges(cluster):
-                reach += cluster_reach[out_cluster]
-            cluster_reach[cluster] = reach + len(c2n[cluster])
-            
-            reachability.update(dict(zip(c2n[cluster], [cluster_reach[cluster]]*len(c2n[cluster]))))
+                reach.extend(cluster_reach[out_cluster])
+                # reach.update(cluster_reach[out_cluster])
+            # reach.update(c2n[cluster])
+            reach.extend(c2n[cluster])
+            cluster_reach[cluster] = set(reach)
+
+            reachability.update(dict(zip(c2n[cluster], [len(cluster_reach[cluster])]*len(c2n[cluster]))))
     # print sorted(reachability.items(), key=lambda(dk,dv):dv, reverse=True)
     print 'Reachibility', sorted(reachability.items(), key=lambda(dk,dv):dv, reverse=True)[:k]
 
@@ -306,7 +310,7 @@ if __name__ == '__main__':
         #     return CCWP(G, length, Ep)
         if pool == None:
             pool = multiprocessing.Pool(processes=3)
-        # Scores = pool.map(CCWP_test, ((G, length, Ep) for i in range(R)))
+        Scores = pool.map(CCWP_test, ((G, length, Ep) for i in range(R)))
         # print Scores
         print 'Finished mapping in', time.time() - time2map
 
@@ -395,10 +399,10 @@ if __name__ == '__main__':
     # print reachability_test
     # print 'benchmark:', time.time() - start
 
-    Q = nx.DiGraph()
-    Q.add_edges_from([(1,2),(2,3),(3,4),(2,5),(5,6)])
-    Q.add_node(0)
-    print CCWP_test((G,3,Ep))
+    # Q = nx.DiGraph()
+    # Q.add_edges_from([(1,2),(2,3),(3,4),(2,5),(5,6), (4,7), (6,7)])
+    # Q.add_node(0)
+    # print CCWP_test((G,3,Ep))
     # print 'Total time: %s' %(time.time() - start)
 
     console = []
