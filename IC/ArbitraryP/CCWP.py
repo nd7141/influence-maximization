@@ -99,26 +99,24 @@ def CCWP((G, k, Ep)):
 
 def CCWP_directed((G, k, Ep)):
     '''
-    Implements Harvester for directed graphs
+    Implements Harvester for directed graphs using BFS to explore reach
     Model: IC
     '''
 
-    # remove blocked edges
-    time2create = time.time()
-    # E = deepcopy(G)
+    # add live edges
+    # if isinstance(G, nx.DiGraph):
+    #     E = nx.DiGraph()
+    # elif isinstance(G, nx.Graph):
+    #     E = nx.Graph()
+    # E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
+    # live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
+    # E.add_edges_from(live_edges)
     E = G
-    edge_rem = [edge for edge in E.edges() if random.random() < (1-Ep[edge])**(E[edge[0]][edge[1]]['weight'])]
-    E.remove_edges_from(edge_rem)
-    # print time.time() - time2create
 
-    time2bfs = time.time()
     # Can be optimized using a heap
     # find score for each node
     scores = dict(zip(E.nodes(), [0]*len(E)))
     reachability = dict()
-    min_top_score = -1
-    top_nodes = []
-    current_length = 0
     for node in E:
         reachable_nodes = [node]
         # Do BFS
@@ -132,15 +130,10 @@ def CCWP_directed((G, k, Ep)):
             i += 1
         reachability[node] = reachable_nodes
         score = len(reachable_nodes)
-
-        # maintain a list of k+ties top nodes
-
         scores[node] = score
 
-    # print 'bfs:', time.time() - time2bfs
-    time2select = time.time()
-    # enhance scores
-    # enhanced_scores = dict(zip(E.nodes(), [0]*len(E))) # resulted scores
+
+    print 'Reachibility', sorted(scores.items(), key=lambda(dk,dv): dv, reverse=True)[:k]
     enhanced_scores = dict()
     sorted_scores = sorted(scores.iteritems(), key = lambda (dk, dv): dv, reverse=True)
     reached_nodes = dict(zip(E.nodes(), [False]*len(E)))
@@ -161,31 +154,30 @@ def CCWP_directed((G, k, Ep)):
                     reached_nodes.update(dict(zip(reachability[node], [True]*len(reachability[node]))))
             else:
                 break
-    # print 'select:', time.time() - time2select
-    print sorted(enhanced_scores.values(), reverse=True)[:k]
+    # print sorted(enhanced_scores.values(), reverse=True)[:k]
     return enhanced_scores
 
 def CCWP_test((G, k, Ep)):
     '''
-    Implements Harvester for directed graphs
+    Implements Harvester for directed graphs using topological sort
     Model: IC
     '''
-    # TODO find why CCWP_test and CCWP_directed produce different reach 
-    # create live-edge graph
-    time2create = time.time()
-    if type(G) == type(nx.DiGraph()):
-        E = nx.DiGraph()
-    else:
-        E = nx.Graph()
-    E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
-    live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
-    E.add_edges_from(live_edges)
-    print time.time() - time2create
 
-    # find CCs and perform topological sort on clusters to find reachability
+    # create live-edge graph
+    # if isinstance(G, nx.DiGraph):
+    #     E = nx.DiGraph()
+    # elif isinstance(G, nx.Graph):
+    #     E = nx.Graph()
+    # E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
+    # live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
+    # E.add_edges_from(live_edges)
+    E = G
+
+    # find CCs and perform topological sort on clusters to find reach
     n2c = dict() # nodes to components
     c2n = dict() # component to nodes
-    reachability = dict(zip(E.nodes(), [1]*len(E))) # number of nodes can be reached by a node
+    reachability = dict() # number of nodes can be reached by a node
+    # reachability = dict(zip(E.nodes(), [1]*len(E)))
 
 
     # find CCs
@@ -199,36 +191,43 @@ def CCWP_test((G, k, Ep)):
     # create dags with components as nodes
     clusters = nx.DiGraph()
     for node in E:
+        # print node, '-->', n2c[node]
+        clusters.add_node(n2c[node])
         for out_node in E[node]:
             if n2c[node] != n2c[out_node]:
                 clusters.add_edge(n2c[node], n2c[out_node])
 
     # find reachability performing topological sort
+    cluster_reach = dict()
     wccs = nx.weakly_connected_component_subgraphs(clusters)
     i = -1
-    for wc in wccs:
-        print len(wc)
     for hub in wccs:
         hub_ts = nx.topological_sort(hub, reverse=True)
-        reach = 0
         for cluster in hub_ts:
-            reach += len(c2n[cluster])
-            reachability.update(dict(zip(c2n[cluster], [reach]*len(c2n[cluster]))))
+            reach = 0
+            for _, out_cluster in clusters.out_edges(cluster):
+                reach += cluster_reach[out_cluster]
+            cluster_reach[cluster] = reach + len(c2n[cluster])
+            
+            reachability.update(dict(zip(c2n[cluster], [cluster_reach[cluster]]*len(c2n[cluster]))))
+    # print sorted(reachability.items(), key=lambda(dk,dv):dv, reverse=True)
+    print 'Reachibility', sorted(reachability.items(), key=lambda(dk,dv):dv, reverse=True)[:k]
 
     # assign scores to k+ties nodes
     sorted_reach = sorted(reachability.iteritems(), key= lambda (dk,dv): dv, reverse=True)
-    scores = dict(sorted_reach[:k])
     min_value = sorted_reach[k-1][1]
     new_idx = k
     new_value = sorted_reach[k][1]
     while new_value == min_value:
         try:
-            scores[sorted_reach[new_idx][0]] = min_value
+            # scores.update({})
+            # scores[sorted_reach[new_idx][0]] = min_value
+            new_idx += 1
+            new_value = sorted_reach[new_idx][1]
         except IndexError:
             break
-        new_idx += 1
-
-    print sorted(scores.values(), reverse=True)[:k]
+    scores = dict(sorted_reach[:new_idx])
+    # print sorted(scores.values(), reverse=True)[:k]
     return scores
 
 def frange(begin, end, step):
@@ -294,7 +293,7 @@ if __name__ == '__main__':
     time_file = open("%s" %time_filename, "a+")
     dbox_seeds_file = open("%s/%s" %(DROPBOX_FOLDER, seeds_filename), "a+")
     dbox_time_file = open("%s/%s" %(DROPBOX_FOLDER, time_filename), "a+")
-    for length in range(3, 4, 10):
+    for length in range(13, 14, 10):
         time2length = time.time()
         print 'Start finding solution for length = %s' %length
         print >>logfile, 'Start finding solution for length = %s' %length
@@ -307,9 +306,20 @@ if __name__ == '__main__':
         #     return CCWP(G, length, Ep)
         if pool == None:
             pool = multiprocessing.Pool(processes=3)
-        Scores = pool.map(CCWP_test, ((G, length, Ep) for i in range(R)))
+        # Scores = pool.map(CCWP_test, ((G, length, Ep) for i in range(R)))
         # print Scores
         print 'Finished mapping in', time.time() - time2map
+
+        # print 'Start mapping...'
+        # time2map = time.time()
+        # # define map function
+        # # def map_CCWP(it):
+        # #     return CCWP(G, length, Ep)
+        # if pool == None:
+        #     pool = multiprocessing.Pool(processes=3)
+        # Scores = pool.map(CCWP_directed, ((G, length, Ep) for i in range(R)))
+        # # print Scores
+        # print 'Finished mapping in', time.time() - time2map
 
         # print 'Start reducing...'
         # time2reduce = time.time()
@@ -385,7 +395,10 @@ if __name__ == '__main__':
     # print reachability_test
     # print 'benchmark:', time.time() - start
 
-
+    Q = nx.DiGraph()
+    Q.add_edges_from([(1,2),(2,3),(3,4),(2,5),(5,6)])
+    Q.add_node(0)
+    print CCWP_test((G,3,Ep))
     # print 'Total time: %s' %(time.time() - start)
 
     console = []
