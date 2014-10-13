@@ -157,81 +157,129 @@ def CCWP_directed((G, k, Ep)):
     # print sorted(enhanced_scores.values(), reverse=True)[:k]
     return enhanced_scores
 
-def CCWP_test((G, k, Ep)):
+# def reach_in_topsort(digraph, ):
+#
+#     for cluster in hub_ts:
+#             # find reach for cluster nodes
+#
+#             reach = set()
+#             for _, out_cluster in clusters.out_edges(cluster):
+#                 reach.update(cluster_reach[out_cluster])
+#             reach.update(c2n[cluster])
+#             cluster_reach[cluster] = reach
+
+def timed(func):
+    def measure_time(*args, **kw):
+        start = time.time()
+        res = func(*args, **kw)
+        finish = time.time()
+
+        print 'Time: %s %.4f sec' %(func.__name__, finish-start)
+        return res
+    return measure_time
+
+def sort_dict(dictionary, reverse=True):
+    return sorted(dictionary.iteritems(), key=lambda (key,value): value, reverse=reverse)
+
+@timed
+def create_live_edge_graph(G, Ep):
+    '''
+    Create live-edge graph from G
+    '''
+    if isinstance(G, nx.DiGraph):
+        E = nx.DiGraph()
+    else:
+        raise ValueError, 'First argument should be DiGraph. Got %s instead' %(type(G))
+    E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
+    live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
+    E.add_edges_from(live_edges)
+
+    return E
+
+@timed
+def find_connected_components(E):
+    n2c = dict() # nodes to components
+    c2n = dict() # component to nodes
+
+    scc = nx.strongly_connected_components(E)
+    for number, component in enumerate(scc):
+        c2n[number] = component
+        n2c.update(dict(zip(component, [number]*len(component))))
+
+    return n2c, c2n
+
+@timed
+def create_dags(E, n2c):
+    dags = nx.DiGraph()
+    for node in E:
+        dags.add_node(n2c[node])
+        for out_node in E[node]:
+            if n2c[node] != n2c[out_node]:
+                dags.add_edge(n2c[node], n2c[out_node])
+    return dags
+
+
+#TODO optimize find_reach function (.4868 sec)
+
+@timed
+def find_reach(dags, c2n):
+    node_reach = dict()
+    cluster_reach = dict()
+
+    # wcc = nx.weakly_connected_component_subgraphs(dags)
+    # for component in wcc:
+    #     topsort = nx.topological_sort(component, reverse=True)
+    #
+    # [c2n[cluster] for cluster in cluster_reach]
+
+
+
+    wccs = nx.weakly_connected_component_subgraphs(dags)
+    for hub in wccs:
+        hub_ts = nx.topological_sort(hub, reverse=True)
+        for cluster in hub_ts:
+            reach = set()
+            for _, out_cluster in dags.out_edges(cluster):
+                reach.update(cluster_reach[out_cluster])
+            reach.update(c2n[cluster])
+            cluster_reach[cluster] = reach
+
+            node_reach.update(dict(zip(c2n[cluster], [len(cluster_reach[cluster])]*len(c2n[cluster]))))
+    return node_reach
+
+@timed
+def assign_scores(node_reach, k):
+    sorted_reach = sorted(node_reach.iteritems(), key= lambda (dk,dv): dv, reverse=True)
+    min_value = sorted_reach[k-1][1]
+    new_idx = k
+    new_value = sorted_reach[k][1]
+    while new_value == min_value:
+        new_idx += 1
+        try:
+            new_value = sorted_reach[new_idx][1]
+        except IndexError:
+            break
+    scores = dict(sorted_reach[:new_idx])
+    return scores
+
+def Harvester_topsort((G, k, Ep)):
     '''
     Implements Harvester for directed graphs using topological sort
     Model: IC
     '''
 
-    # create live-edge graph
-    if isinstance(G, nx.DiGraph):
-        E = nx.DiGraph()
-    elif isinstance(G, nx.Graph):
-        E = nx.Graph()
-    E.add_nodes_from(G.nodes()) # add all nodes in case of isolated components
-    live_edges = [edge for edge in G.edges() if random.random() >= (1-Ep[edge])**(G[edge[0]][edge[1]]['weight'])]
-    E.add_edges_from(live_edges)
-    # E = G
+    E = create_live_edge_graph(G, Ep)
 
-    # find CCs and perform topological sort on clusters to find reach
-    n2c = dict() # nodes to components
-    c2n = dict() # component to nodes
-    reachability = dict() # number of nodes can be reached by a node
-    # reachability = dict(zip(E.nodes(), [1]*len(E)))
+    n2c, c2n = find_connected_components(E)
 
+    dags = create_dags(E, n2c)
 
-    # find CCs
-    scc = nx.strongly_connected_components(E)
-    number_scc = -1
-    for component in scc:
-        number_scc += 1
-        c2n[number_scc] = component
-        n2c.update(dict(zip(component, [number_scc]*len(component))))
+    node_reach = find_reach(dags, c2n)
 
-    # create dags with components as nodes
-    clusters = nx.DiGraph()
-    for node in E:
-        # print node, '-->', n2c[node]
-        clusters.add_node(n2c[node])
-        for out_node in E[node]:
-            if n2c[node] != n2c[out_node]:
-                clusters.add_edge(n2c[node], n2c[out_node])
+    scores = assign_scores(node_reach, k)
 
-    # find reachability performing topological sort
-    cluster_reach = dict()
-    wccs = nx.weakly_connected_component_subgraphs(clusters)
-    i = -1
-    for hub in wccs:
-        hub_ts = nx.topological_sort(hub, reverse=True)
-        for cluster in hub_ts:
-            # reach = set()
-            reach = []
-            for _, out_cluster in clusters.out_edges(cluster):
-                reach.extend(cluster_reach[out_cluster])
-                # reach.update(cluster_reach[out_cluster])
-            # reach.update(c2n[cluster])
-            reach.extend(c2n[cluster])
-            cluster_reach[cluster] = set(reach)
+    print sort_dict(scores)
 
-            reachability.update(dict(zip(c2n[cluster], [len(cluster_reach[cluster])]*len(c2n[cluster]))))
-    # print sorted(reachability.items(), key=lambda(dk,dv):dv, reverse=True)
-    print 'Reachibility', sorted(reachability.items(), key=lambda(dk,dv):dv, reverse=True)[:k]
-
-    # assign scores to k+ties nodes
-    sorted_reach = sorted(reachability.iteritems(), key= lambda (dk,dv): dv, reverse=True)
-    min_value = sorted_reach[k-1][1]
-    new_idx = k
-    new_value = sorted_reach[k][1]
-    while new_value == min_value:
-        try:
-            # scores.update({})
-            # scores[sorted_reach[new_idx][0]] = min_value
-            new_idx += 1
-            new_value = sorted_reach[new_idx][1]
-        except IndexError:
-            break
-    scores = dict(sorted_reach[:new_idx])
-    # print sorted(scores.values(), reverse=True)[:k]
     return scores
 
 def frange(begin, end, step):
@@ -310,7 +358,7 @@ if __name__ == '__main__':
         #     return CCWP(G, length, Ep)
         if pool == None:
             pool = multiprocessing.Pool(processes=3)
-        Scores = pool.map(CCWP_test, ((G, length, Ep) for i in range(R)))
+        Scores = pool.map(Harvester_topsort, ((G, length, Ep) for i in range(R)))
         # print Scores
         print 'Finished mapping in', time.time() - time2map
 
@@ -399,9 +447,13 @@ if __name__ == '__main__':
     # print reachability_test
     # print 'benchmark:', time.time() - start
 
-    # Q = nx.DiGraph()
-    # Q.add_edges_from([(1,2),(2,3),(3,4),(2,5),(5,6), (4,7), (6,7)])
-    # Q.add_node(0)
+    Q = nx.DiGraph()
+    Q.add_edges_from([(1,2),(2,3),(3,4),(2,5),(5,6), (4,7), (6,7)])
+    Q.add_node(0)
+
+    P = nx.DiGraph()
+    P.add_edges_from([(4,1), (4,3), (3,2), (2,1), (2,0)])
+    P.add_edges_from([(7,6), (7,5)])
     # print CCWP_test((G,3,Ep))
     # print 'Total time: %s' %(time.time() - start)
 
