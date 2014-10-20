@@ -12,16 +12,25 @@ def runIC(G, S, Ep):
     activated = dict(zip(G.nodes(), [False]*len(G)))
     activated.update(dict(zip(S, [True]*len(S))))
 
-    for activated_node in S:
+    new_activated_nodes = []
+    for node in S:
+        for out_node in G[node]:
+            if not activated[out_node]:
+                if random.random() <= 1 - (1 - Ep[(node, out_node)])**G[node][out_node]["weight"]:
+                    activated[out_node] = True
+                    new_activated_nodes.append(out_node)
+
+    for activated_node in new_activated_nodes:
         for out_node in G[activated_node]:
             if not activated[out_node]:
                 if random.random() <= 1 - (1 - Ep[(activated_node,out_node)])**G[activated_node][out_node]["weight"]:
                     activated[out_node] = True
-                    S.append(out_node)
-    return S
+                    new_activated_nodes.append(out_node)
+
+    return len(S) + len(new_activated_nodes)
 
 def getCoverage((G, S, Ep)):
-    return len(runIC(G, S, Ep))
+    return runIC(G, S, Ep)
 
 if __name__ == "__main__":
 
