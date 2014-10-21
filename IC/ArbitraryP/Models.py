@@ -18,4 +18,17 @@ def Multivalency(G):
         raise NotImplementedError
     return Ep
 
-
+def WC(G):
+    Ep = dict()
+    if isinstance(G, nx.Graph):
+        degree = G.degree(weight="weight")
+        for e in G.edges():
+            Ep[e[0], e[1]] = 1./degree[e[1]]
+            Ep[e[1], e[0]] = 1./degree[e[0]]
+    elif isinstance(G, nx.DiGraph):
+        in_degree = G.in_degree(weight="weight")
+        for e in G.edges():
+            Ep[e[0], e[1]] = 1./in_degree[e[1]]
+    else:
+        raise NotImplementedError
+    return Ep
