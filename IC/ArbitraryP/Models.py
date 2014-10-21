@@ -32,3 +32,16 @@ def WC(G):
     else:
         raise NotImplementedError
     return Ep
+
+def Uniform(G, p):
+    Ep = dict()
+    if isinstance(G, nx.Graph):
+        for e in G.edges():
+            Ep[e[0], e[1]] = p
+            Ep[e[1], e[0]] = p
+    elif isinstance(G, nx.DiGraph):
+        for e in G.edges():
+            Ep[e[0], e[1]] = p
+    else:
+        raise NotImplementedError
+    return Ep
