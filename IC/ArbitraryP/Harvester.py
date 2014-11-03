@@ -65,7 +65,8 @@ def update_scores(E, k, scores):
             else:
                 M[node] = 0
         # assign scores to top nodes until there are k mutually nonoverlapping nodes
-        sorted_outhop_reach = sorted(outhop_reach.iteritems(), key = lambda (_,v): v, reverse = True)
+        sorted_outhop_reach = sorted(outhop_reach.iteritems(), key = lambda (_,v): len(v), reverse = True)
+        # print sorted_outhop_reach[:1]
         marked_nodes = set()
         nonoveralpping_nodes = 0
         for node, node_outhop_reach in sorted_outhop_reach:
@@ -79,7 +80,8 @@ def update_scores(E, k, scores):
         else:
             print 'Number of nonoverlapping nodes is less than k.'
             print 'Assigned scores to all nodes.'
-
+    else:
+        raise NotImplementedError
 
 def select_seeds(G, k ,Ep, scores):
     selected = dict(zip(G.nodes(), [False]*len(G)))
