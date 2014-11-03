@@ -3,17 +3,35 @@ import networkx as nx
 import random
 
 def make_possible_world(G, Ep):
-    if isinstance(G, nx.Graph):
-        live_edges = [e for e in G.edges_iter() if random.random() <= 1 - (1-Ep[e])**G[e[0]][e[1]]["weight"]]
+    live_edges = [e for e in G.edges_iter() if random.random() <= 1 - (1-Ep[e])**G[e[0]][e[1]]["weight"]]
+    if type(G) == type(nx.Graph()):
         E = nx.Graph()
-        E.add_nodes_from(G.nodes())
-        E.add_edges_from(live_edges)
-        return E
-    elif isinstance(G, nx.DiGraph):
+    elif type(G) == type(nx.DiGraph()):
+        E = nx.DiGraph()
+    else:
         raise NotImplementedError
+    E.add_nodes_from(G.nodes())
+    E.add_edges_from(live_edges)
+    return E
+
+def find_multihop_neighbors(E):
+    node_outhop_neighbors = {u: [] for u in E}
+    node_inhop_neighbors = {u: [] for u in E}
+
+    for node in E:
+        out_edges = E.out_edges(node)
+        i = 0
+        while i < len(out_edges):
+            e = out_edges[i]
+            if e[1] not in node_outhop_neighbors[node] and e[1] != node:
+                node_outhop_neighbors[node].append(e[1])
+                node_inhop_neighbors[e[1]].append(node)
+                out_edges.extend(E.out_edges(e[1]))
+            i += 1
+    return node_inhop_neighbors, node_outhop_neighbors
 
 def update_scores(E, k, scores):
-    if isinstance(E, nx.Graph):
+    if type(E) == type(nx.Graph()):
         # return connected components from largest to smallest
         connected_components = nx.connected_components(E)
         connected_components = sorted(connected_components, key=lambda cc: len(cc), reverse=True)
@@ -32,8 +50,8 @@ def update_scores(E, k, scores):
                         scores[node] += score
                 else:
                     break
-    elif isinstance(E, nx.DiGraph):
-        raise NotImplementedError
+    elif type(E) == type(nx.DiGraph()):
+        node_reach = dict()
 
 def select_seeds(G, k ,Ep, scores):
     selected = dict(zip(G.nodes(), [False]*len(G)))
@@ -51,9 +69,17 @@ def select_seeds(G, k ,Ep, scores):
     return S
 
 def Harvester(G, k, Ep, MC):
+    '''
+    Harvester function for influence maximization problem.
+    Implemented for both undirected and directed case.
+    '''
+
+    # initialization
     scores = dict(zip(G.nodes(), [0]*len(G)))
+    # run Monte-Carlo simulations to find scores
     for it1 in range(MC):
         E = make_possible_world(G, Ep)
         update_scores(E, k, scores)
+    # select seeds
     seeds = select_seeds(G, k ,Ep, scores)
     return seeds
