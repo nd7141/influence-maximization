@@ -30,6 +30,9 @@ def find_multihop_neighbors(E):
             i += 1
     return node_inhop_neighbors, node_outhop_neighbors
 
+def avg(lst):
+    return float(sum(lst))/len(lst)
+
 def update_scores(E, k, scores):
     if type(E) == type(nx.Graph()):
         # return connected components from largest to smallest
@@ -51,7 +54,32 @@ def update_scores(E, k, scores):
                 else:
                     break
     elif type(E) == type(nx.DiGraph()):
-        node_reach = dict()
+        # find reach of incoming and outgoing nodes
+        inhop_reach, outhop_reach = find_multihop_neighbors(E)
+        # assign credit for each node (reverse to # of nodes that can reach this node)
+        M  = dict()
+        for node in E:
+            Mi = len(inhop_reach[node])
+            if Mi:
+                M[node] = 1./Mi
+            else:
+                M[node] = 0
+        # assign scores to top nodes until there are k mutually nonoverlapping nodes
+        sorted_outhop_reach = sorted(outhop_reach.iteritems(), key = lambda (_,v): v, reverse = True)
+        marked_nodes = set()
+        nonoveralpping_nodes = 0
+        for node, node_outhop_reach in sorted_outhop_reach:
+            score = sum([M[out_node] for out_node in node_outhop_reach])
+            scores[node] += score
+            if node not in marked_nodes:
+                nonoveralpping_nodes += 1
+                marked_nodes.update([node] + node_outhop_reach)
+            if nonoveralpping_nodes == k:
+                break
+        else:
+            print 'Number of nonoverlapping nodes is less than k.'
+            print 'Assigned scores to all nodes.'
+
 
 def select_seeds(G, k ,Ep, scores):
     selected = dict(zip(G.nodes(), [False]*len(G)))
