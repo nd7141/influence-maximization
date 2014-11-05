@@ -64,12 +64,17 @@ def update_scores(E, k, scores):
                 M[node] = 1./Mi
             else:
                 M[node] = 0
-        # assign scores to top nodes until there are k mutually nonoverlapping nodes
-        sorted_outhop_reach = sorted(outhop_reach.iteritems(), key = lambda (_,v): len(v), reverse = True)
-        # print sorted_outhop_reach[:1]
+        # sort nodes by their reach
+        sorted_outhop_reach = sorted(outhop_reach.iteritems(),
+                                     key = lambda (_,outreach): len(outreach),#*sum([M[u] for u in outreach]),
+                                     reverse = True)
+        # print sorted_outhop_reach[:2]
         marked_nodes = set()
         nonoveralpping_nodes = 0
+        last_idx = -1
+        # assign scores to nodes in sorted order until k mutually unreachable nodes get their scores
         for node, node_outhop_reach in sorted_outhop_reach:
+            last_idx += 1
             score = sum([M[out_node] for out_node in node_outhop_reach])
             scores[node] += score
             if node not in marked_nodes:
@@ -80,6 +85,13 @@ def update_scores(E, k, scores):
         else:
             print 'Number of nonoverlapping nodes is less than k.'
             print 'Assigned scores to all nodes.'
+        # handle ties
+        for node, reach in sorted_outhop_reach[last_idx+1:]:
+            if len(reach) != len(node_outhop_reach):
+                break
+            else:
+                score = sum([M[out_node] for out_node in reach])
+                scores[node] += score
     else:
         raise NotImplementedError
 
