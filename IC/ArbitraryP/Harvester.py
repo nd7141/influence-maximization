@@ -31,7 +31,24 @@ def find_multihop_neighbors(E):
     return node_inhop_neighbors, node_outhop_neighbors
 
 def avg(lst):
-    return float(sum(lst))/len(lst)
+    if len(lst):
+        return float(sum(lst))/len(lst)
+    return 0
+
+def avg2(lst):
+    if len(lst):
+        return float(sum(lst))/len(lst)
+    return float('inf')
+
+def min2(lst):
+    if len(lst):
+        return min(lst)
+    return float('inf')
+
+def max2(lst):
+    if len(lst):
+        return max(lst)
+    return float('inf')
 
 def update_scores(E, k, scores):
     if type(E) == type(nx.Graph()):
@@ -66,7 +83,7 @@ def update_scores(E, k, scores):
                 M[node] = 0
         # sort nodes by their reach
         sorted_outhop_reach = sorted(outhop_reach.iteritems(),
-                                     key = lambda (_,outreach): len(outreach),#*sum([M[u] for u in outreach]),
+                                     key = lambda (_,outreach): len(outreach),
                                      reverse = True)
         # print sorted_outhop_reach[:2]
         marked_nodes = set()
