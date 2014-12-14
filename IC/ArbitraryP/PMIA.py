@@ -5,7 +5,7 @@
 
 from __future__ import division
 import networkx as nx
-import math
+import math, time
 from copy import deepcopy
 from runIAC import avgIAC
 import multiprocessing, json
@@ -27,7 +27,8 @@ def updateAP(ap, S, PMIIAv, PMIIA_MIPv, Ep):
             in_edges = PMIIAv.in_edges([u], data=True)
             prod = 1
             for w, _, edata in in_edges:
-                p = (1 - (1 - Ep[(w, u)])**edata["weight"])
+                # p = (1 - (1 - Ep[(w, u)])**edata["weight"])
+                p = Ep[(w,u)]
                 prod *= 1 - ap[(w, PMIIAv)]*p
             ap[(u, PMIIAv)] = 1 - prod
 
@@ -48,9 +49,11 @@ def updateAlpha(alpha, v, S, PMIIAv, PMIIA_MIPv, Ep, ap):
                 prod = 1
                 for up, _, edata in in_edges:
                     if up != u:
-                        pp_upw = 1 - (1 - Ep[(up, w)])**edata["weight"]
+                        # pp_upw = 1 - (1 - Ep[(up, w)])**edata["weight"]
+                        pp_upw = Ep[(up, w)]
                         prod *= (1 - ap[(up, PMIIAv)]*pp_upw)
-                alpha[(PMIIAv, u)] = alpha[(PMIIAv, w)]*(1 - (1 - Ep[(u,w)])**PMIIAv[u][w]["weight"])*prod
+                # alpha[(PMIIAv, u)] = alpha[(PMIIAv, w)]*(1 - (1 - Ep[(u,w)])**PMIIAv[u][w]["weight"])*prod
+                alpha[(PMIIAv, u)] = alpha[(PMIIAv, w)]*(Ep[(u,w)])*prod
 
 def computePMIOA(G, u, theta, S, Ep):
     '''
@@ -74,7 +77,8 @@ def computePMIOA(G, u, theta, S, Ep):
         sorted_crossing_edges = sorted(crossing_edges) # to break ties consistently
         for edge in sorted_crossing_edges:
             if edge not in edge_weights:
-                edge_weights[edge] = -math.log(1 - (1 - Ep[edge])**G[edge[0]][edge[1]]["weight"])
+                # edge_weights[edge] = -math.log(1 - (1 - Ep[edge])**G[edge[0]][edge[1]]["weight"])
+                edge_weights[edge] = -math.log(Ep[edge])
             edge_weight = edge_weights[edge]
             if dist[edge[0]] + edge_weight < min_dist:
                 min_dist = dist[edge[0]] + edge_weight
@@ -82,7 +86,8 @@ def computePMIOA(G, u, theta, S, Ep):
         # check stopping criteria
         if min_dist < -math.log(theta):
             dist[min_edge[1]] = min_dist
-            PMIOA.add_edge(min_edge[0], min_edge[1], {"weight": G[min_edge[0]][min_edge[1]]["weight"]})
+            # PMIOA.add_edge(min_edge[0], min_edge[1], {"weight": G[min_edge[0]][min_edge[1]]["weight"]})
+            PMIOA.add_edge(min_edge[0], min_edge[1])
             PMIOA_MIP[min_edge[1]] = PMIOA_MIP[min_edge[0]] + [min_edge[1]]
             # update crossing edges
             crossing_edges.difference_update(G.in_edges(min_edge[1]))
@@ -118,7 +123,8 @@ def computePMIIA(G, ISv, v, theta, S, Ep):
         sorted_crossing_edges = sorted(crossing_edges) # to break ties consistently
         for edge in sorted_crossing_edges:
             if edge not in edge_weights:
-                edge_weights[edge] = -math.log(1 - (1 - Ep[edge])**G[edge[0]][edge[1]]["weight"])
+                # edge_weights[edge] = -math.log(1 - (1 - Ep[edge])**G[edge[0]][edge[1]]["weight"])
+                edge_weights[edge] = -math.log(Ep[edge])
             edge_weight = edge_weights[edge]
             if dist[edge[1]] + edge_weight < min_dist:
                 min_dist = dist[edge[1]] + edge_weight
@@ -127,7 +133,8 @@ def computePMIIA(G, ISv, v, theta, S, Ep):
         # print min_edge, ':', min_dist, '-->', -math.log(theta)
         if min_dist < -math.log(theta):
             dist[min_edge[0]] = min_dist
-            PMIIA.add_edge(min_edge[0], min_edge[1], {"weight": G[min_edge[0]][min_edge[1]]["weight"]})
+            # PMIIA.add_edge(min_edge[0], min_edge[1], {"weight": G[min_edge[0]][min_edge[1]]["weight"]})
+            PMIIA.add_edge(min_edge[0], min_edge[1])
             PMIIA_MIP[min_edge[0]] = PMIIA_MIP[min_edge[1]] + [min_edge[0]]
             # update crossing edges
             crossing_edges.difference_update(G.out_edges(min_edge[0]))
@@ -139,7 +146,6 @@ def computePMIIA(G, ISv, v, theta, S, Ep):
     return PMIIA, PMIIA_MIP
 
 def PMIA(G, k, theta, Ep):
-    import time
     start = time.time()
     # initialization
     S = []
