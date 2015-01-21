@@ -14,6 +14,33 @@ import networkx as nx
 from itertools import cycle
 from math import exp, log
 import random, time
+from collections import Counter
+from itertools import product
+
+def _comprehension_flatten(iter_lst):
+    return [item for lst in iter_lst for item in lst]
+
+def minimum_spanning_edges(G,weight='weight',data=True):
+    from networkx.utils import UnionFind
+    if G.is_directed():
+        raise nx.NetworkXError(
+            "Mimimum spanning tree not defined for directed graphs.")
+
+    subtrees = UnionFind()
+    edges = sorted(G.edges(data=True),key=lambda t: t[2].get(weight,1))
+    for u,v,d in edges:
+        if subtrees[u] != subtrees[v]:
+            if data:
+                yield (u,v,d)
+            else:
+                yield (u,v)
+            subtrees.union(u,v)
+
+# adopted MST algo without isolated nodes
+# solution found here http://networkx.lanl.gov/_modules/networkx/algorithms/mst.html
+def minimum_spanning_tree(G,weight='weight'):
+    T=nx.Graph(nx.minimum_spanning_edges(G,weight=weight,data=True))
+    return T
 
 def get_PW(G):
     '''
@@ -28,8 +55,8 @@ def get_PW(G):
     # extract multiple MPST until all edges in G are removed
     MPSTs = []
     while len(E.edges()):
-        mpst = nx.minimum_spanning_tree(E)
-        print '|mpst.edges|:', len(mpst.edges())
+        mpst = minimum_spanning_tree(E)
+        print '|mpst|:', len(mpst), '|mpst.edges|:', len(mpst.edges())
         MPSTs.append(mpst)
         E.remove_edges_from(mpst.edges())
     print 'Found %s MPST' %(len(MPSTs))
@@ -67,16 +94,19 @@ def get_rel_with_mpst(MPSTs):
     Expected to have -log(p_e) as weights in each mpst
     '''
     rel = dict()
-    nodes = MPSTs[0].nodes()
     for en, mpst in enumerate(MPSTs):
-        print 'mpst #', en
-        # TODO consider pairs only in the tree, not in G
+        print 'mpst #', en, "len(mpst):", len(mpst)
+        nodes = mpst.nodes()
         for i in range(len(nodes)-1):
+            print i, len(nodes)
             for j in range(i+1, len(nodes)):
+                print j,
+                time2pair = time.time()
                 u = nodes[i]
                 v = nodes[j]
                 # find reliability along the path between u and v
-                paths = list(nx.all_simple_paths(mpst, u,v))
+                paths = list(nx.all_simple_paths(mpst, u, v))
+                print time.time() - time2pair,
                 assert len(paths) <= 1, "Should be only one path from u=%s to v=%s" %(u,v)
                 if len(paths) == 1:
                     path = paths[0]
@@ -87,6 +117,7 @@ def get_rel_with_mpst(MPSTs):
                     # add reliability in this mpst to total reliability
                     rel[(u,v)] = rel.get((u,v), 0) + r
                     rel[(v,u)] = rel.get((v,u), 0) + r
+                print time.time() - time2pair
     return rel
 
 def get_rel_with_mc(G, mc=100):
@@ -95,35 +126,47 @@ def get_rel_with_mc(G, mc=100):
 
     Expected to have -log(p_e) as weights in G
     '''
+    print 'MC:', mc
     rel = dict()
     for _ in range(mc):
         # create a random PW
         live_edges = [(e[0], e[1]) for e in G.edges(data=True) if exp(1)**(-e[2]["weight"]) > random.random()]
         E = nx.Graph()
         E.add_edges_from(live_edges)
-        print "Created a random PW"
+        print "%s: Created a random PW" %(_+1)
         print 'E:', len(E), 'E.edges:', len(E.edges())
-        # TODO assign 1./mc to all pairs in CC instead of in G
         # for every pair of nodes check if there is a path
-        nodes = E.nodes()
-        for i in range(len(nodes)-1):
-            print len(nodes), '-->', i
-            for j in range(i+1, len(nodes)):
-                u = nodes[i]
-                v = nodes[j]
-                if nx.has_path(E, u, v):
-                    rel[(u,v)] = rel.get((u,v), 0) + 1./mc
-                    rel[(v,u)] = rel.get((v,u), 0) + 1./mc
+        CCs = nx.connected_components(E)
+        for cc in CCs:
+            if len(cc) > 1:
+                for u in cc:
+                    for v in cc:
+                        rel[(u,v)] = rel.get((u,v), 0) + 1./mc
+    print len(rel)
     return rel
 
-def get_objective(G_rel, PW_rel, edges):
+def get_rel_for_pw(PW):
+    print len(PW), len(PW.edges())
+    CCs = nx.connected_components(PW)
+    rel = dict()
+    for cc in CCs:
+        cc_pairs = list(product(cc, repeat=2))
+        rel.update(dict(zip(cc_pairs, [1]*len(cc_pairs))))
+    print len(rel)
+    return rel
+
+def get_objective(G_rel, PW_rel):
     '''
     Computes the objective, which is the sum of reliability discrepancies over all pairs of nodes.
     '''
     Obj = 0
-    for e in edges:
-        Obj += abs(G_rel[e] - PW_rel[e])
-    return Obj
+    print len(G_rel.keys()), len(PW_rel.keys())
+    pairs = set(G_rel.keys() + PW_rel.keys())
+    print 'Found %s pairs' %len(pairs)
+    for p in pairs:
+        if p[0] != p[1]:
+            Obj += abs(G_rel.get(p, 0) - PW_rel.get(p, 0))
+    return Obj/2
 
 if __name__ == "__main__":
     time2execute = time.time()
@@ -132,7 +175,7 @@ if __name__ == "__main__":
     time2read = time.time()
     with open("hep15233.txt") as f:
         for line in f:
-            u,v,p = map(float, line.split())
+            u, v, p = map(float, line.split())
             if u != v:
                 G.add_edge(int(u), int(v), weight = -log(p))
     print "Read graph in % sec" %(time.time() - time2read)
@@ -144,35 +187,32 @@ if __name__ == "__main__":
     print "Extracted MPST PW in %s sec" %(time.time() - time2PW)
     print
 
-    # TODO check how mc affects results
     time2Grel2 = time.time()
     G_rel2 = get_rel_with_mpst(MPSTs)
-    print "Calculated G MPST reliability in % sec" %(time.time() - time2Grel2)
-    print
-
-    time2PWrel = time.time()
-    PW_rel = get_rel_with_mc(PW, mc = 1)
-    print "Calculated PW reliability in % sec" %(time.time() - time2PWrel)
+    print "Calculated G MPST reliability in %s sec" %(time.time() - time2Grel2)
     print
 
     time2Grel1 = time.time()
     G_rel1 = get_rel_with_mc(G, mc = 1)
-    print "Calculated G MC reliability  in % sec" %(time.time() - time2Grel1)
+    print "Calculated G MC reliability  in %s sec" %(time.time() - time2Grel1)
     print
 
-    edges = G.edges()
+    time2PWrel = time.time()
+    PW_rel = get_rel_for_pw(PW)
+    print "Calculated PW reliability in %s sec" %(time.time() - time2PWrel)
+    print
 
     time2Obj1 = time.time()
-    Obj1 = get_objective(G_rel1, PW_rel, edges)
+    Obj1 = get_objective(G_rel1, PW_rel)
     print "Calculated MC-MC objective in %s sec" %(time.time() - time2Obj1)
     print "MC-MC Objective: %s" %Obj1
     print
 
-    time2Obj2 = time.time()
-    Obj2 = get_objective(G_rel2, PW_rel, edges)
-    print "Calculated MPST-MC objective in %s sec" %(time.time() - time2Obj2)
-    print "MPST-MC Objective: %s" %Obj2
-    print
+    # time2Obj2 = time.time()
+    # Obj2 = get_objective(G_rel2, PW_rel)
+    # print "Calculated MPST-MC objective in %s sec" %(time.time() - time2Obj2)
+    # print "MPST-MC Objective: %s" %Obj2
+    # print
 
     print "Finished execution in %s sec" %(time.time() - time2execute)
 
