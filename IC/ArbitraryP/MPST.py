@@ -13,7 +13,7 @@ from __future__ import division
 import networkx as nx
 from itertools import cycle
 from math import exp, log
-import random, time
+import random, time, sys
 from collections import Counter
 from itertools import product
 
@@ -79,7 +79,7 @@ def get_PW(G):
             PW.add_edge(u,v,weight=0)
             selected[(u,v)] = True
             selected[(v,u)] = True
-            print "Added edge (%s,%s): P %s |PW.edges| %s" %(u,v,P,len(PW.edges()))
+            # print "Added edge (%s,%s): P %s |PW.edges| %s" %(u,v,P,len(PW.edges()))
         # stop when expected number of edges reached
         if len(PW.edges()) > P:
             break
@@ -87,44 +87,63 @@ def get_PW(G):
     print 'G:', len(G), 'G.edges', len(G.edges())
     return PW, MPSTs
 
-def get_rel_with_mpst(MPSTs):
+def find_reliability_in_mpst(mpst, u, v):
+    '''
+    Expected to have -log(p_e) as weights in each mpst.
+    '''
+    # find reliability along the path between u and v
+    try:
+        # paths = list(nx.all_simple_paths(mpst, u, v))
+        path = nx.shortest_path(mpst, u, v, "weight")
+    except (nx.NetworkXError, KeyError, nx.NetworkXNoPath):
+        r = 0
+    else:
+        r = 1
+        for ix in range(len(path)-1):
+            weight = mpst[path[ix]][path[ix+1]]["weight"]
+            r *= exp(1)**(-weight)
+    return r
+
+def get_rel_with_mpst(MPSTs, pairs=None):
     '''
     Compute estimates of reliability of every pair of nodes
 
-    Expected to have -log(p_e) as weights in each mpst
+    Expected to have -log(p_e) as weights in each mpst.
+
+    if pairs = None finds reliability among all pairs,
+    else only for those pairs specified.
     '''
     rel = dict()
-    for en, mpst in enumerate(MPSTs):
-        print 'mpst #', en, "len(mpst):", len(mpst)
-        nodes = mpst.nodes()
-        for i in range(len(nodes)-1):
-            print i, len(nodes)
-            for j in range(i+1, len(nodes)):
-                print j,
-                time2pair = time.time()
-                u = nodes[i]
-                v = nodes[j]
-                # find reliability along the path between u and v
-                paths = list(nx.all_simple_paths(mpst, u, v))
-                print time.time() - time2pair,
-                assert len(paths) <= 1, "Should be only one path from u=%s to v=%s" %(u,v)
-                if len(paths) == 1:
-                    path = paths[0]
-                    r = 1 # reliability between u and v along the path in this mpst
-                    for ix in range(len(path)-1):
-                        weight = mpst[path[ix]][path[ix+1]]["weight"]
-                        r *= exp(1)**(-weight)
-                    # add reliability in this mpst to total reliability
+    if pairs:
+        for idx, pair in enumerate(pairs):
+            u = pair[0]
+            v = pair[1]
+            for mpst in MPSTs:
+                r = find_reliability_in_mpst(mpst, u, v)
+                rel[(u,v)] = rel.get((u,v), 0) + r
+                rel[(v,u)] = rel.get((v,u), 0) + r
+    else:
+        for en, mpst in enumerate(MPSTs):
+            print 'mpst #', en, "len(mpst):", len(mpst)
+            nodes = mpst.nodes()
+            for i in range(len(nodes)-1):
+                for j in range(i+1, len(nodes)):
+                    u = nodes[i]
+                    v = nodes[j]
+                    r = find_reliability_in_mpst(mpst, u, v)
                     rel[(u,v)] = rel.get((u,v), 0) + r
                     rel[(v,u)] = rel.get((v,u), 0) + r
-                print time.time() - time2pair
+    print sorted(rel.items(), key = lambda (k,v): v, reverse=True)[:10]
     return rel
 
-def get_rel_with_mc(G, mc=100):
+def get_rel_with_mc(G, mc=100, pairs=None):
     '''
     Compute reliability between a pair of nodes using Monte-Carlo simulations
 
-    Expected to have -log(p_e) as weights in G
+    Expected to have -log(p_e) as weights in G.
+
+    if pairs = None finds reliability among all pairs,
+    else only for those pairs specified.
     '''
     print 'MC:', mc
     rel = dict()
@@ -133,26 +152,52 @@ def get_rel_with_mc(G, mc=100):
         live_edges = [(e[0], e[1]) for e in G.edges(data=True) if exp(1)**(-e[2]["weight"]) > random.random()]
         E = nx.Graph()
         E.add_edges_from(live_edges)
-        print "%s: Created a random PW" %(_+1)
-        print 'E:', len(E), 'E.edges:', len(E.edges())
-        # for every pair of nodes check if there is a path
-        CCs = nx.connected_components(E)
-        for cc in CCs:
-            if len(cc) > 1:
-                for u in cc:
-                    for v in cc:
-                        rel[(u,v)] = rel.get((u,v), 0) + 1./mc
-    print len(rel)
+        # print "%s: Created a random PW" %(_+1)
+        # print 'E:', len(E), 'E.edges:', len(E.edges())
+        if pairs:
+            # for every provided pair of nodes check if there is a path
+            for pair in pairs:
+                u = pair[0]
+                v = pair[1]
+                r = 0
+                if pair in live_edges:
+                    r = 1./mc
+                rel[(u,v)] = rel.get((u,v), 0) + r
+                rel[(v,u)] = rel.get((v,u), 0) + r
+        else:
+            # for every pair of nodes in E check if there is a path
+            CCs = nx.connected_components(E)
+            for cc in CCs:
+                if len(cc) > 1:
+                    for u in cc:
+                        for v in cc:
+                            rel[(u,v)] = rel.get((u,v), 0) + 1./mc
+    print sorted(rel.items(), key = lambda (k,v): v, reverse=True)[:10]
     return rel
 
-def get_rel_for_pw(PW):
-    print len(PW), len(PW.edges())
-    CCs = nx.connected_components(PW)
+def get_rel_for_pw(PW, pairs=None):
+    '''
+    if pairs = None finds reliability among all pairs,
+    else only for those pairs specified.
+    '''
+    # print len(PW), len(PW.edges())
+    all_edges = PW.edges()
     rel = dict()
-    for cc in CCs:
-        cc_pairs = list(product(cc, repeat=2))
-        rel.update(dict(zip(cc_pairs, [1]*len(cc_pairs))))
-    print len(rel)
+    if pairs:
+        for pair in pairs:
+            u = pair[0]
+            v = pair[1]
+            r = 0
+            if pair in all_edges:
+                r = 1
+            rel[(u,v)] = r
+            rel[(v,u)] = r
+    else:
+        CCs = nx.connected_components(PW)
+        for cc in CCs:
+            cc_pairs = list(product(cc, repeat=2))
+            rel.update(dict(zip(cc_pairs, [1]*len(cc_pairs))))
+    print sorted(rel.items(), key = lambda (k,v): v, reverse=True)[:10]
     return rel
 
 def get_objective(G_rel, PW_rel):
@@ -160,13 +205,25 @@ def get_objective(G_rel, PW_rel):
     Computes the objective, which is the sum of reliability discrepancies over all pairs of nodes.
     '''
     Obj = 0
-    print len(G_rel.keys()), len(PW_rel.keys())
     pairs = set(G_rel.keys() + PW_rel.keys())
     print 'Found %s pairs' %len(pairs)
     for p in pairs:
         if p[0] != p[1]:
             Obj += abs(G_rel.get(p, 0) - PW_rel.get(p, 0))
     return Obj/2
+
+def _make_pairs(G, l):
+    '''
+    Create l different pairs of nodes (u,v), where u != v
+    '''
+    pairs = []
+    nodes = G.nodes()
+    while len(pairs) < l:
+        u = random.choice(nodes)
+        v = random.choice(nodes)
+        if u != v and (u,v) not in pairs:
+            pairs.append((u,v))
+    return pairs
 
 if __name__ == "__main__":
     time2execute = time.time()
@@ -182,23 +239,30 @@ if __name__ == "__main__":
     print "G: n %s m %s" %(len(G), len(G.edges()))
     print
 
+    time2pairs = time.time()
+    l = 4000
+    pairs = _make_pairs(G, l)
+    print pairs
+    print 'Made %s pairs in %s sec' %(l, time.time() - time2pairs)
+    print
+
     time2PW = time.time()
     PW, MPSTs = get_PW(G)
     print "Extracted MPST PW in %s sec" %(time.time() - time2PW)
     print
 
     time2Grel2 = time.time()
-    G_rel2 = get_rel_with_mpst(MPSTs)
+    G_rel2 = get_rel_with_mpst(MPSTs, pairs)
     print "Calculated G MPST reliability in %s sec" %(time.time() - time2Grel2)
     print
 
     time2Grel1 = time.time()
-    G_rel1 = get_rel_with_mc(G, mc = 1)
+    G_rel1 = get_rel_with_mc(G, 2000, pairs)
     print "Calculated G MC reliability  in %s sec" %(time.time() - time2Grel1)
     print
 
     time2PWrel = time.time()
-    PW_rel = get_rel_for_pw(PW)
+    PW_rel = get_rel_for_pw(PW, pairs)
     print "Calculated PW reliability in %s sec" %(time.time() - time2PWrel)
     print
 
@@ -208,11 +272,11 @@ if __name__ == "__main__":
     print "MC-MC Objective: %s" %Obj1
     print
 
-    # time2Obj2 = time.time()
-    # Obj2 = get_objective(G_rel2, PW_rel)
-    # print "Calculated MPST-MC objective in %s sec" %(time.time() - time2Obj2)
-    # print "MPST-MC Objective: %s" %Obj2
-    # print
+    time2Obj2 = time.time()
+    Obj2 = get_objective(G_rel2, PW_rel)
+    print "Calculated MPST-MC objective in %s sec" %(time.time() - time2Obj2)
+    print "MPST-MC Objective: %s" %Obj2
+    print
 
     print "Finished execution in %s sec" %(time.time() - time2execute)
 
