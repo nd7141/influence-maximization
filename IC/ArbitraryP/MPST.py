@@ -118,8 +118,9 @@ def get_rel_with_mpst(MPSTs, pairs=None):
         for idx, pair in enumerate(pairs):
             u = pair[0]
             v = pair[1]
-            for mpst in MPSTs:
+            for idx, mpst in enumerate(MPSTs):
                 r = find_reliability_in_mpst(mpst, u, v)
+                print idx, len(MPSTs), r
                 rel[(u,v)] = rel.get((u,v), 0) + r
                 rel[(v,u)] = rel.get((v,u), 0) + r
     else:
@@ -225,6 +226,65 @@ def _make_pairs(G, l):
             pairs.append((u,v))
     return pairs
 
+def get_sparcified_mpst(MPSTs, K):
+    '''
+    Get sparcified (uncetain graph with K edges) graph using MPST.
+
+    MPSTs ordered from largest to smallest.
+
+    Expected to have -log(p_e) as weights in G.
+    '''
+
+    # sort edges
+    sorted_edges = []
+    for mpst in MPSTs:
+        sorted_edges.extend(sorted(mpst.edges(data=True), key = lambda (u,v,data): exp(1)**(-data["weight"]), reverse=True))
+    print "Sorted edges..."
+
+    SP = nx.Graph() # sparcified graph
+    SP.add_edges_from(sorted_edges[:K])
+
+    return SP
+
+def get_sparcified_greedy(G, K):
+    '''
+    Get sparcified (uncetain graph with K edges) graph using greedy.
+
+    Expected to have -log(p_e) as weights in G.
+    '''
+    all_edges = G.edges(data=True)
+    sorted_edges = sorted(all_edges, key = lambda (u,v,data): exp(1)**(-data["weight"]), reverse=True)
+    # create a SP
+    selected = dict()
+    for (u,v,d) in all_edges:
+        selected[(u,v)] = False
+        selected[(v,u)] = False
+    SP = nx.Graph()
+    for (u,v,data) in cycle(sorted_edges):
+        # add edge with probability p
+        if not selected[(u,v)] and exp(1)**(-data["weight"]) > random.random():
+            SP.add_edge(u,v,data)
+            selected[(u,v)] = True
+            selected[(v,u)] = True
+            # print "Added edge (%s,%s): P %s |PW.edges| %s" %(u,v,P,len(PW.edges()))
+        # stop when expected number of edges reached
+        if len(SP.edges()) == K:
+            break
+    return SP
+
+def get_sparcified_top(G,K):
+    '''
+    Get sparcified (uncetain graph with K edges) graph using top most probable edges.
+
+    Expected to have -log(p_e) as weights in G.
+    '''
+    all_edges = G.edges(data=True)
+    sorted_edges = sorted(all_edges, key = lambda (u,v,data): exp(1)**(-data["weight"]), reverse=True)
+    SP = nx.Graph() # sparcified graph
+    SP.add_edges_from(sorted_edges[:K])
+    return SP
+
+
 if __name__ == "__main__":
     time2execute = time.time()
 
@@ -241,7 +301,8 @@ if __name__ == "__main__":
 
     time2pairs = time.time()
     l = 4000
-    pairs = _make_pairs(G, l)
+    # pairs = _make_pairs(G, l)
+    pairs = [(11052, 11371), (9097, 10655)]
     print pairs
     print 'Made %s pairs in %s sec' %(l, time.time() - time2pairs)
     print
@@ -257,7 +318,7 @@ if __name__ == "__main__":
     print
 
     time2Grel1 = time.time()
-    G_rel1 = get_rel_with_mc(G, 2000, pairs)
+    G_rel1 = get_rel_with_mc(G, 100, pairs)
     print "Calculated G MC reliability  in %s sec" %(time.time() - time2Grel1)
     print
 
