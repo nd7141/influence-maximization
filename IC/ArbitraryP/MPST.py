@@ -151,11 +151,9 @@ def get_rel_with_mc(G, mc=100, pairs=None):
     rel = dict()
     for _ in range(mc):
         # create a random PW
-        live_edges = [(e[0], e[1]) for e in G.edges(data=True) if exp(1)**(-e[2]["weight"]) > random.random()]
+        live_edges = [(e[0], e[1], e[2]) for e in G.edges(data=True) if e[2]["weight"] < -log(random.random())]
         E = nx.Graph()
         E.add_edges_from(live_edges)
-        # print "%s: Created a random PW" %(_+1)
-        # print 'E:', len(E), 'E.edges:', len(E.edges())
         if pairs:
             print_dict = dict()
             # for every provided pair of nodes check if there is a path
@@ -164,7 +162,7 @@ def get_rel_with_mc(G, mc=100, pairs=None):
                 v = pair[1]
                 r = 0
                 if u in E and v in E and nx.has_path(E, u, v):
-                    r = 1./mc
+                    r = 1
                 rel[(u,v)] = rel.get((u,v), 0) + r
                 rel[(v,u)] = rel.get((v,u), 0) + r
                 print_dict[pair] = rel[pair]
@@ -176,6 +174,10 @@ def get_rel_with_mc(G, mc=100, pairs=None):
                     for u in cc:
                         for v in cc:
                             rel[(u,v)] = rel.get((u,v), 0) + 1./mc
+    for key in rel:
+        rel[key] = float(rel[key])/mc
+        if key in print_dict:
+            print_dict[key] /= mc
     if pairs:
         print sorted(print_dict.items(), key = lambda (k,v): v, reverse = True)[:10]
     else:
@@ -222,7 +224,7 @@ def get_objective(G_rel, PW_rel):
     for p in pairs:
         if p[0] != p[1]:
             Obj += abs(G_rel.get(p, 0) - PW_rel.get(p, 0))
-    return Obj/2
+    return Obj/2, Obj/(2*len(pairs))
 
 def _make_pairs(G, l):
     '''
@@ -279,7 +281,6 @@ def get_sparsified_greedy(G, K):
             SP.add_edge(u,v,data)
             selected[(u,v)] = True
             selected[(v,u)] = True
-            # print "Added edge (%s,%s): P %s |PW.edges| %s" %(u,v,P,len(PW.edges()))
         # stop when expected number of edges reached
         if len(SP.edges()) == int(progress*.1*K):
             progress += 1
@@ -308,7 +309,7 @@ def get_sparsified_random(G, K):
     '''
     all_edges = G.edges(data=True)
     random_edges = random.sample(all_edges, K)
-    SP = nx.Graph() # sparcified graph
+    SP = nx.Graph() # sparsified graph
     SP.add_edges_from(random_edges[:K])
     return SP
 
@@ -317,23 +318,29 @@ if __name__ == "__main__":
 
     G = nx.Graph()
     time2read = time.time()
-    with open("hep15233.txt") as f:
+    with open("hep15233_2.txt") as f:
         for line in f:
             u, v, p = map(float, line.split())
             if u != v:
                 G.add_edge(int(u), int(v), weight = -log(p))
     print "Read graph in % sec" %(time.time() - time2read)
-    print "G: n %s m %s" %(len(G), len(G.edges()))
+    print "G: n = %s m = %s" %(len(G), len(G.edges()))
     print
 
     time2pairs = time.time()
     l = 4000
     # pairs = _make_pairs(G, l)
+    # print 'Made %s pairs in %s sec' %(l, time.time() - time2pairs)
     pairs = [(11052, 11371), (9097, 10655)]
-    pairs = pairs[0][:1]
-    pairs = G.edges()
-    print 'Made %s pairs in %s sec' %(l, time.time() - time2pairs)
-    print
+    pairs = [(11052, 11371)]
+    print pairs
+    # pairs = G.edges()
+    # pairs = None
+
+    # triangle graph
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(0,1,-log(.5)), (1,2,-log(.1)), (2,0,-log(1))])
+    # pairs = [(0,1)]
 
     # Get PW, MPST, SP
     # time2PW = time.time()
@@ -341,49 +348,51 @@ if __name__ == "__main__":
     # print "Extracted MPST PW in %s sec" %(time.time() - time2PW)
     # print
 
-    P = sum([exp(1)**(-data["weight"]) for (u,v,data) in G.edges(data=True)]) # expected number of edges
-    percentage = .1
-    obj_results = dict()
-    for track in range(1, 11):
-        print '------------------------------------'
-        print 'Step %s' %track
-        K = track*int(percentage*len(G.edges()))
-        track += 1
-        # K = 5*int(P)
-        print 'K:', K, "|G|:", len(G.edges())
+    MC = 1000
 
-        # time2SP1 = time.time()
-        # SP1 = get_sparsified_mpst(MPSTs, K)
-        # print "Extracted MPST SP in %s sec" %(time.time() - time2SP1)
+    time2Grel1 = time.time()
+    G_rel1 = get_rel_with_mc(G, MC, pairs)
+    print "Calculated G MC reliability  in %s sec" %(time.time() - time2Grel1)
+    print
+
+    # time2SP1 = time.time()
+    # SP1 = get_sparsified_mpst(MPSTs, K)
+    # print "Extracted MPST SP in %s sec" %(time.time() - time2SP1)
+    # print
+
+    # time2SP2 = time.time()
+    # SP2 = get_sparsified_greedy(G, K)
+    # print "Extracted Greedy SP in %s sec" %(time.time() - time2SP2)
+    # print
+
+    # time2SP3 = time.time()
+    # SP3 = get_sparsified_top(G, K)
+    # print "Extracted Top SP in %s sec" %(time.time() - time2SP3)
+    # print
+
+    # P = sum([exp(1)**(-data["weight"]) for (u,v,data) in G.edges(data=True)]) # expected number of edges
+    # percentage = .1
+    # obj_results = dict()
+    # avg_error = dict()
+    # for track in range(10, 11):
+    #     print '------------------------------------'
+    #     print 'Step %s' %track
+    #     K = int(track*percentage*len(G.edges()))
+    #     track += 1
+    #     # K = 5*int(P)
+    #     print 'K:', K, "|G|:", len(G.edges())
+
+        # time2SP_Random = time.time()
+        # SP_random = get_sparsified_random(G, K)
+        # print "Extracted Random SP in %s sec" %(time.time() - time2SP_Random)
         # print
-
-        # time2SP2 = time.time()
-        # SP2 = get_sparsified_greedy(G, K)
-        # print "Extracted Greedy SP in %s sec" %(time.time() - time2SP2)
-        # print
-
-        # time2SP3 = time.time()
-        # SP3 = get_sparsified_top(G, K)
-        # print "Extracted Top SP in %s sec" %(time.time() - time2SP3)
-        # print
-
-        time2SP_Random = time.time()
-        SP_random = get_sparsified_random(G, K)
-        print "Extracted Random SP in %s sec" %(time.time() - time2SP_Random)
-        print
 
         # ----------------- Get Reliability ------------------ #
-        MC = 100
 
-        time2Grel1 = time.time()
-        G_rel1 = get_rel_with_mc(G, MC, pairs)
-        print "Calculated G MC reliability  in %s sec" %(time.time() - time2Grel1)
-        print
-
-        time2SP_Randomrel = time.time()
-        SP_random_rel = get_rel_with_mc(SP_random, MC, pairs)
-        print "Calculated SP MC reliability  in %s sec" %(time.time() - time2SP_Randomrel)
-        print
+        # time2SP_Randomrel = time.time()
+        # SP_random_rel = get_rel_with_mc(G, MC, pairs)
+        # print "Calculated SP MC reliability  in %s sec" %(time.time() - time2SP_Randomrel)
+        # print
 
 
         # time2Grel2 = time.time()
@@ -412,14 +421,17 @@ if __name__ == "__main__":
         # print
 
         # ---------------------- Calculate Objective -------------------------- #
-        time2Obj1 = time.time()
-        Obj1 = get_objective(G_rel1, SP_random_rel)
-        print "Calculated MC-MC objective in %s sec" %(time.time() - time2Obj1)
-        print "MC-MC Objective: %s" %Obj1
-        print
-        obj_results.update({(track-1)*10: Obj1})
-        with open("Sparsified_results/Sparsified_Random_MC%s.txt" %MC, "w+") as fp:
-            json.dump(obj_results, fp)
+        # time2Obj1 = time.time()
+        # Obj1, avg_Obj1 = get_objective(G_rel1, SP_random_rel)
+        # print "Calculated MC-MC objective in %s sec" %(time.time() - time2Obj1)
+        # print "MC-MC Objective: %s; avg Objective: %s" %(Obj1, avg_Obj1)
+        # print
+        # obj_results.update({(track-1)*10: Obj1})
+        # avg_error.update({(track-1)*10: avg_Obj1})
+        # with open("Sparsified_results/Sparsified_Random_MC%s.txt" %MC, "w+") as fp:
+        #     json.dump(obj_results, fp)
+        # with open("Sparsified_results/Sparsified_Random_MC%s_avg.txt" %MC, "w+") as fp:
+        #     json.dump(avg_error, fp)
         #
         # time2Obj2 = time.time()
         # Obj2 = get_objective(G_rel2, PW_rel)
