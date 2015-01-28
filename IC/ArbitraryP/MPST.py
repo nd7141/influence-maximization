@@ -173,13 +173,14 @@ def get_rel_with_mc(G, mc=100, pairs=None):
                 if len(cc) > 1:
                     for u in cc:
                         for v in cc:
-                            rel[(u,v)] = rel.get((u,v), 0) + 1./mc
+                            rel[(u,v)] = rel.get((u,v), 0) + 1
     for key in rel:
         rel[key] = float(rel[key])/mc
         if key in print_dict:
             print_dict[key] /= mc
     if pairs:
         print sorted(print_dict.items(), key = lambda (k,v): v, reverse = True)[:10]
+        print 'Found %s non-zero rel out of %s pairs' %(len(filter(lambda v: v > 1e-10, print_dict.values())), len(print_dict))
     else:
         print sorted(rel.items(), key = lambda (k,v): v, reverse=True)[:10]
     return rel
@@ -261,7 +262,7 @@ def get_sparsified_mpst(MPSTs, K):
 
 def get_sparsified_greedy(G, K):
     '''
-    Get sparsified (uncertain graph with K edges) graph using greedy.
+    Get sparsified (uncertain graph with K edges) graph choosing the most probable edges first.
 
     Expected to have -log(p_e) as weights in G.
     '''
@@ -313,6 +314,21 @@ def get_sparsified_random(G, K):
     SP.add_edges_from(random_edges[:K])
     return SP
 
+def get_sparsified_top2(G, G_rel, K):
+    '''
+    Get sparsified (uncertain graph with K edges) graph choosing edges
+    based on ascending order of (1 - rel)*p/(1-p)
+
+    Expected to have -log(p_e) as weights in G.
+    '''
+    all_edges = G.edges(data = True)
+    sorted_edges = sorted(all_edges,
+                          key = lambda (u,v,d): exp(1)**(-d["weight"])*(1 - G_rel[(u,v)])/(1 - exp(1)**(-d["weight"])),
+                          reverse = True)
+    SP = nx.Graph()
+    SP.add_edges_from(sorted_edges[:K])
+    return SP
+
 if __name__ == "__main__":
     time2execute = time.time()
 
@@ -331,10 +347,11 @@ if __name__ == "__main__":
     l = 4000
     # pairs = _make_pairs(G, l)
     # print 'Made %s pairs in %s sec' %(l, time.time() - time2pairs)
-    pairs = [(11052, 11371), (9097, 10655)]
-    pairs = [(11052, 11371)]
-    print pairs
-    # pairs = G.edges()
+    # pairs = [(11052, 11371), (9097, 10655)]
+    # pairs = [(11052, 11371)]
+    # print pairs
+    pairs = G.edges()
+    print len(pairs)
     # pairs = None
 
     # triangle graph
@@ -348,12 +365,13 @@ if __name__ == "__main__":
     # print "Extracted MPST PW in %s sec" %(time.time() - time2PW)
     # print
 
-    MC = 1000
+    MC = 100
 
     time2Grel1 = time.time()
     G_rel1 = get_rel_with_mc(G, MC, pairs)
     print "Calculated G MC reliability  in %s sec" %(time.time() - time2Grel1)
     print
+
 
     # time2SP1 = time.time()
     # SP1 = get_sparsified_mpst(MPSTs, K)
@@ -365,34 +383,54 @@ if __name__ == "__main__":
     # print "Extracted Greedy SP in %s sec" %(time.time() - time2SP2)
     # print
 
-    # time2SP3 = time.time()
-    # SP3 = get_sparsified_top(G, K)
-    # print "Extracted Top SP in %s sec" %(time.time() - time2SP3)
-    # print
-
     # P = sum([exp(1)**(-data["weight"]) for (u,v,data) in G.edges(data=True)]) # expected number of edges
-    # percentage = .1
-    # obj_results = dict()
-    # avg_error = dict()
-    # for track in range(10, 11):
-    #     print '------------------------------------'
-    #     print 'Step %s' %track
-    #     K = int(track*percentage*len(G.edges()))
-    #     track += 1
-    #     # K = 5*int(P)
-    #     print 'K:', K, "|G|:", len(G.edges())
+    percentage = .1
+    obj_random_results = dict()
+    avg_random_error = dict()
+    obj_top_results = dict()
+    avg_top_error = dict()
+    obj_top2_results = dict()
+    avg_top2_error = dict()
+    for track in range(1, 11):
+        time2track = time.time()
+        print '------------------------------------'
+        print 'Step %s' %track
+        K = int(track*percentage*len(G.edges()))
+        track += 1
+        # K = 5*int(P)
+        print 'K:', K, "|G|:", len(G.edges())
 
-        # time2SP_Random = time.time()
-        # SP_random = get_sparsified_random(G, K)
-        # print "Extracted Random SP in %s sec" %(time.time() - time2SP_Random)
-        # print
+        time2SP_top = time.time()
+        SP_top = get_sparsified_top(G, K)
+        print "Extracted Top SP in %s sec" %(time.time() - time2SP_top)
+        print
+
+        time2SP_top2 = time.time()
+        SP_top2 = get_sparsified_top2(G, G_rel1, K)
+        print "Extracted Top2 SP in %s sec" %(time.time() - time2SP_top2)
+        print
+
+        time2SP_Random = time.time()
+        SP_random = get_sparsified_random(G, K)
+        print "Extracted Random SP in %s sec" %(time.time() - time2SP_Random)
+        print
 
         # ----------------- Get Reliability ------------------ #
 
-        # time2SP_Randomrel = time.time()
-        # SP_random_rel = get_rel_with_mc(G, MC, pairs)
-        # print "Calculated SP MC reliability  in %s sec" %(time.time() - time2SP_Randomrel)
-        # print
+        time2SP_toprel = time.time()
+        SP_top_rel = get_rel_with_mc(SP_top, MC, pairs)
+        print "Calculated SP_top MC reliability  in %s sec" %(time.time() - time2SP_toprel)
+        print
+
+        time2SP_top2rel = time.time()
+        SP_top2_rel = get_rel_with_mc(SP_top2, MC, pairs)
+        print "Calculated SP_top2 MC reliability  in %s sec" %(time.time() - time2SP_top2rel)
+        print
+
+        time2SP_Randomrel = time.time()
+        SP_random_rel = get_rel_with_mc(SP_random, MC, pairs)
+        print "Calculated SP_random MC reliability  in %s sec" %(time.time() - time2SP_Randomrel)
+        print
 
 
         # time2Grel2 = time.time()
@@ -405,39 +443,48 @@ if __name__ == "__main__":
         # print "Calculated PW reliability in %s sec" %(time.time() - time2PWrel)
         # print
 
-        # time2SP1rel = time.time()
-        # SP1_rel = get_rel_with_mc(SP1, MC, pairs)
-        # print "Calculated MPST SP MC reliability  in %s sec" %(time.time() - time2SP1rel)
-        # print
-
-        # time2SP2rel = time.time()
-        # SP2_rel = get_rel_with_mc(SP2, MC, pairs)
-        # print "Calculated Greedy SP MC reliability  in %s sec" %(time.time() - time2SP2rel)
-        # print
-
-        # time2SP3rel = time.time()
-        # SP3_rel = get_rel_with_mc(SP3, MC, pairs)
-        # print "Calculated Top SP MC reliability  in %s sec" %(time.time() - time2SP3rel)
-        # print
-
         # ---------------------- Calculate Objective -------------------------- #
-        # time2Obj1 = time.time()
-        # Obj1, avg_Obj1 = get_objective(G_rel1, SP_random_rel)
-        # print "Calculated MC-MC objective in %s sec" %(time.time() - time2Obj1)
-        # print "MC-MC Objective: %s; avg Objective: %s" %(Obj1, avg_Obj1)
-        # print
-        # obj_results.update({(track-1)*10: Obj1})
-        # avg_error.update({(track-1)*10: avg_Obj1})
-        # with open("Sparsified_results/Sparsified_Random_MC%s.txt" %MC, "w+") as fp:
-        #     json.dump(obj_results, fp)
-        # with open("Sparsified_results/Sparsified_Random_MC%s_avg.txt" %MC, "w+") as fp:
-        #     json.dump(avg_error, fp)
-        #
-        # time2Obj2 = time.time()
-        # Obj2 = get_objective(G_rel2, PW_rel)
-        # print "Calculated MPST-MC objective in %s sec" %(time.time() - time2Obj2)
-        # print "MPST-MC Objective: %s" %Obj2
-        # print
+        time2Obj1 = time.time()
+        Obj1, avg_Obj1 = get_objective(G_rel1, SP_random_rel)
+        print "Calculated MC-MC Random objective in %s sec" %(time.time() - time2Obj1)
+        print "MC-MC Objective: %s; avg Objective: %s" %(Obj1, avg_Obj1)
+        print
+
+        obj_random_results.update({(track-1)*10: Obj1})
+        avg_random_error.update({(track-1)*10: avg_Obj1})
+        with open("Sparsified_results/Sparsified_Random_MC%s.txt" %MC, "w+") as fp:
+            json.dump(obj_random_results, fp)
+        with open("Sparsified_results/Sparsified_Random_MC%s_avg.txt" %MC, "w+") as fp:
+            json.dump(avg_random_error, fp)
+
+        time2Obj2 = time.time()
+        Obj2, avg_Obj2 = get_objective(G_rel1, SP_top_rel)
+        print "Calculated MC-MC Top objective in %s sec" %(time.time() - time2Obj2)
+        print "MC-MC Objective: %s; avg Objective: %s" %(Obj2, avg_Obj2)
+        print
+
+        obj_top_results.update({(track-1)*10: Obj2})
+        avg_top_error.update({(track-1)*10: avg_Obj2})
+        with open("Sparsified_results/Sparsified_Top_MC%s.txt" %MC, "w+") as fp:
+            json.dump(obj_top_results, fp)
+        with open("Sparsified_results/Sparsified_Top_MC%s_avg.txt" %MC, "w+") as fp:
+            json.dump(avg_top_error, fp)
+
+        time2Obj3 = time.time()
+        Obj3, avg_Obj3 = get_objective(G_rel1, SP_top2_rel)
+        print "Calculated MC-MC Top2 objective in %s sec" %(time.time() - time2Obj3)
+        print "MC-MC Objective: %s; avg Objective: %s" %(Obj3, avg_Obj3)
+        print
+
+        obj_top2_results.update({(track-1)*10: Obj3})
+        avg_top2_error.update({(track-1)*10: avg_Obj3})
+        with open("Sparsified_results/Sparsified_Top2_MC%s.txt" %MC, "w+") as fp:
+            json.dump(obj_top2_results, fp)
+        with open("Sparsified_results/Sparsified_Top2_MC%s_avg.txt" %MC, "w+") as fp:
+            json.dump(avg_top2_error, fp)
+
+        print
+        print 'Spent %s for iteration' %(time.time() - time2track)
 
     print "Finished execution in %s sec" %(time.time() - time2execute)
 
