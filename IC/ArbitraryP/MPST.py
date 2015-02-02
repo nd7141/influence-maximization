@@ -152,7 +152,7 @@ def get_rel_with_mc(G, mc=100, pairs=None):
     rel = dict()
     for _ in range(mc):
         # create a random PW
-        live_edges = [(e[0], e[1], e[2]) for e in G.edges(data=True) if e[2]["weight"] < -log(random.random())]
+        live_edges = [e for e in G.edges(data=True) if e[2]["weight"] < -log(random.random())]
         E = nx.Graph()
         E.add_edges_from(live_edges)
         if pairs:
@@ -333,6 +333,47 @@ def get_sparsified_top2(G, G_rel, K):
     SP.add_edges_from(sorted_edges[:K])
     return SP
 
+def get_sparsified_APSP(G, K, cutoff=None):
+    '''
+    Get sparsified (uncertain graph with K edges) graph choosing edges
+    based on ascending order of sp*p, where sp is the the number of shortest path of an edge
+
+    Expected to have -log(p_e) as weights in G.
+    '''
+    print 'Start APSP...'
+    time2APSP = time.time()
+    paths = {}
+    for i, n in enumerate(G):
+        print i, len(G)
+        paths[n] = nx.single_source_dijkstra_path(G, n, cutoff=cutoff,
+                                               weight="weight")
+    print 'Finish APSP in %s sec' %(time.time() - time2APSP)
+    print paths
+
+    checked = dict()
+    edges_score = dict()
+    for u in paths:
+        u_paths = paths[u]
+        for v in u_paths:
+            # print 'Pair %s %s' %(u,v)
+            if u != v and not checked.get((v,u), False):
+                path = u_paths[v]
+                for i in range(len(path) - 1):
+                    e1, e2 = path[i], path[i+1]
+                    # print 'Add to edge %s %s' %(e1, e2)
+                    edges_score[(e1, e2)] = edges_score.get((e1, e2), 0) + 1
+                    edges_score[(e2, e1)] = edges_score.get((e2, e1), 0) + 1
+                checked[(u,v)] = True
+                checked[(v,u)] = True
+    print edges_score
+    sorted_edges = sorted(G.edges(data=True),
+                          key = lambda (u,v,d): exp(1)**(-d["weight"])*edges_score[(u,v)],
+                          reverse = True)
+
+    SP = nx.Graph()
+    SP.add_edges_from(sorted_edges[:K])
+    return SP
+
 def test_MC(G, pair, gt, MC_limit, chunks=10):
     '''
     Outputs the error of reliability of a pair in the graph computed by MC
@@ -381,17 +422,20 @@ if __name__ == "__main__":
     print len(pairs)
     # pairs = None
 
-    # triangle graph
-    G = nx.Graph()
-    G.add_weighted_edges_from([(0,1,-log(.5)), (1,2,-log(.1)), (2,0,-log(1))])
-    pairs = [(0,1)]
+    # # triangle graph
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(0,1,-log(.5)), (1,2,-log(.1)), (2,0,-log(1))])
+    # pairs = [(0,1)]
+    #
+    # # one-edge graph
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(0,1,-log(.5))])
+    # pairs = [(0,1)]
 
-    # one-edge graph
-    G = nx.Graph()
-    G.add_weighted_edges_from([(0,1,-log(.5))])
-    pairs = [(0,1)]
-
-    print test_MC(G, (0,1), .5, 10000)
+    # protein graph
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+    print get_sparsified_APSP(G, 2)
 
     # Get PW, MPST, SP
     # time2PW = time.time()
