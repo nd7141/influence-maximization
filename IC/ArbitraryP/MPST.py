@@ -396,6 +396,49 @@ def get_sparsified_APSP(G, K, cutoff=None):
 
     return sorted_edges[:K]
 
+def get_sparsified_MP_MPST(G, K):
+    '''
+    Sparsify graph by first finding minimum spanning tree,
+    then adding most probable edges.
+    '''
+    G_edges = G.edges(data=True)
+    MPST_edges = list(nx.minimum_spanning_edges(G,weight='weight',data=True))
+    edges = [e for e in G_edges if e not in MPST_edges]
+    mp_edges = sorted(edges,
+                    key = lambda (u,v,d): exp(1)**(-d["weight"]),
+                    reverse = True)
+    if len(MPST_edges) <= K:
+        MPST_edges.extend(mp_edges[:(K - len(MPST_edges))])
+    else:
+        # remove edges that are adjacent to leaves (keeping connectivity)
+        # if ties remove with lowest probability (keeping probability)
+        MPST = nx.Graph(MPST_edges)
+        degrees = dict()
+        leaves = set()
+        for u in MPST:
+            degrees[u] = len(MPST[u])
+            if degrees[u] == 1:
+                v, d = MPST[u].items()[0]
+                leaves.add((u,v,d["weight"]))
+        for _ in range(len(MPST_edges) - K):
+            u,v,d = min(leaves, key = lambda (u,v,d): exp(1)**(-d))
+            MPST.remove_edge(u,v)
+            leaves.remove((u,v,d))
+            v_edges = MPST[v].items()
+            if len(v_edges) == 1:
+                w, t = v_edges[0]
+                leaves.add((v,w,t["weight"]))
+            elif len(v_edges) == 0:
+                leaves.remove((v,u,d))
+        print len(MPST.edges()), K
+        MPST_edges = MPST.edges(data=True)
+
+        # MPST_edges = sorted(MPST_edges,
+        #                     key = lambda (u,v,d): exp(1)**(-d["weight"]),
+        #                     reverse = True)
+        # MPST_edges = MPST_edges[:K]
+    return MPST_edges
+
 def get_graph_from_file(filename):
     SP = nx.Graph()
     with open(filename) as f:
@@ -488,15 +531,23 @@ if __name__ == "__main__":
     # G.add_weighted_edges_from([(0,1,-log(.5))])
     # pairs = [(0,1)]
 
-    # protein graph
+    # # protein graph
     # G = nx.Graph()
     # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+    #
+    # G.add_edge(0, 4, weight=-log(.1))
+    # G.add_edge(4, 5, weight=-log(.15))
+    # G.add_edge(5, 6, weight=-log(0.5))
+
+    # time2sp = time.time()
+    # get_sparsified_MP_MPST(G, int(len(G.edges())/2 + 1000))
+    # print time.time() - time2sp
 
     # Get PW, MPST, SP
-    time2PW = time.time()
-    PW, MPSTs = get_PW(G)
-    print "Extracted MPST PW in %s sec" %(time.time() - time2PW)
-    print
+    # time2PW = time.time()
+    # PW, MPSTs = get_PW(G)
+    # print "Extracted MPST PW in %s sec" %(time.time() - time2PW)
+    # print
 
     MC = 100
 
@@ -514,8 +565,8 @@ if __name__ == "__main__":
                 selected[(v,u)] = True
     print 'Total number of pairs: %s' %(len(pairs))
 
-    print 'Finding edge reliabilities...'
-    edge_rel = get_rel_with_mc(G, MC, pairs=G.edges(), cutoff_multiplier= 0)
+    # print 'Finding edge reliabilities...'
+    # edge_rel = get_rel_with_mc(G, MC, pairs=G.edges(), cutoff_multiplier= 0)
 
     percentage = .1
     obj_random_results = dict()
@@ -545,23 +596,29 @@ if __name__ == "__main__":
     obj_mpst_rd_results = dict()
 
     # get sparsified edges
-    time2top = time.time()
-    top_edges_full = get_sparsified_top(G, len(G.edges()))
-    print 'Sparsified Top in %s sec' %(time.time() - time2top)
-    time2top2 = time.time()
-    top2_edges_full = get_sparsified_top2(G, len(G.edges()), edge_rel=edge_rel)
-    print 'Sparsified Top2 in %s sec' %(time.time() - time2top2)
-    time2top3 = time.time()
-    top3_edges_full = get_sparsified_top3(G, len(G.edges()), edge_rel=edge_rel)
-    print 'Sparsified Top3 in %s sec' %(time.time() - time2top3)
-    time2random = time.time()
-    random_edges_full = get_sparsified_random(G, len(G.edges()))
-    print 'Sparsified Random in %s sec' %(time.time() - time2random)
-    time2mpst = time.time()
-    mpst_edges_full = get_sparsified_mpst(MPSTs, len(G.edges()))
-    print 'Sparsified MPST in %s sec' %(time.time() - time2mpst)
+    # time2top = time.time()
+    # top_edges_full = get_sparsified_top(G, int(len(G.edges())/10*2))
+    # print 'Sparsified Top in %s sec' %(time.time() - time2top)
+    # # with distribution
+    # time2RD_top = time.time()
+    # RD_top = get_redistributed(G, top_edges_full)
+    # print "Extracted Top RD in %s sec" %(time.time() - time2RD_top)
+    # print
 
-    for track in range(1, 10):
+    # time2top2 = time.time()
+    # top2_edges_full = get_sparsified_top2(G, len(G.edges()), edge_rel=edge_rel)
+    # print 'Sparsified Top2 in %s sec' %(time.time() - time2top2)
+    # time2top3 = time.time()
+    # top3_edges_full = get_sparsified_top3(G, len(G.edges()), edge_rel=edge_rel)
+    # print 'Sparsified Top3 in %s sec' %(time.time() - time2top3)
+    # time2random = time.time()
+    # random_edges_full = get_sparsified_random(G, len(G.edges()))
+    # print 'Sparsified Random in %s sec' %(time.time() - time2random)
+    # time2mpst = time.time()
+    # mpst_edges_full = get_sparsified_mpst(MPSTs, len(G.edges()))
+    # print 'Sparsified MPST in %s sec' %(time.time() - time2mpst)
+
+    for track in range(4, 5):
         time2track = time.time()
         print '------------------------------------'
         print 'Step %s' %track
@@ -570,12 +627,18 @@ if __name__ == "__main__":
         # K = 5*int(P)
         print 'K:', K, "|G|:", len(G.edges())
 
+        # edges = get_sparsified_MP_MPST(G, K)
+        # with open("Sparsified_results/Sparsified_graph/MPST/hep15233_2_K%s.txt" %((track-1)*10), "w+") as f:
+        #     for (u,v,d) in edges:
+        #         f.write("%d %d %s\n" %(u, v, exp(-d["weight"])))
+        #         f.write("%d %d %s\n" %(v, u, exp(-d["weight"])))
+
         # get sparsified edges
-        top_edges = top_edges_full[:K]
-        top2_edges = top2_edges_full[:K]
-        top3_edges = top3_edges_full[:K]
-        random_edges = random_edges_full[:K]
-        mpst_edges = mpst_edges_full[:K]
+        # top_edges = top_edges_full[:K]
+        # top2_edges = top2_edges_full[:K]
+        # top3_edges = top3_edges_full[:K]
+        # random_edges = random_edges_full[:K]
+        # mpst_edges = mpst_edges_full[:K]
 
         # time2SP_top = time.time()
         # SP_top = nx.Graph()
@@ -611,32 +674,36 @@ if __name__ == "__main__":
         # SP_ADR = get_graph_from_file("Sparsified_results/ADR_noredistribution/ADR%s_hep15233_2.txt" %((track-1)*10))
         # print "Extracted ADR SP in %s sec" %(time.time() - time2SP_ABM1)
         # print
-
-        # with distribution
-        time2RD_top = time.time()
-        RD_top = get_redistributed(G, top_edges)
-        print "Extracted Top RD in %s sec" %(time.time() - time2RD_top)
-        print
-
-        time2RD_top2 = time.time()
-        RD_top2 = get_redistributed(G, top2_edges)
-        print "Extracted Top2 RD in %s sec" %(time.time() - time2RD_top2)
-        print
-
-        time2RD_top3 = time.time()
-        RD_top3 = get_redistributed(G, top3_edges)
-        print "Extracted Top3 RD in %s sec" %(time.time() - time2RD_top3)
-        print
-
-        time2RD_random = time.time()
-        RD_random = get_redistributed(G, random_edges)
-        print "Extracted Random RD in %s sec" %(time.time() - time2RD_random)
-        print
-
-        time2RD_mpst = time.time()
-        RD_mpst = get_redistributed(G, mpst_edges)
-        print "Extracted MPST RD in %s sec" %(time.time() - time2RD_mpst)
-        print
+        #
+        # # with distribution
+        # time2RD_top = time.time()
+        # RD_top = get_redistributed(G, top_edges)
+        # print "Extracted Top RD in %s sec" %(time.time() - time2RD_top)
+        # print
+        #
+        # with open("Sparsified_results/Redistributed_graph/hep15233_2_K%s.txt" %((track-1)*10), "w+") as f:
+        #     for e in sorted(RD_top.edges(data = True), key = lambda (u, v, d): exp(1)**(-d["weight"]), reverse=True):
+        #         f.write("%s %s %s\n" %(e[0], e[1], exp(1)**(-e[2]["weight"])))
+        #
+        # time2RD_top2 = time.time()
+        # RD_top2 = get_redistributed(G, top2_edges)
+        # print "Extracted Top2 RD in %s sec" %(time.time() - time2RD_top2)
+        # print
+        #
+        # time2RD_top3 = time.time()
+        # RD_top3 = get_redistributed(G, top3_edges)
+        # print "Extracted Top3 RD in %s sec" %(time.time() - time2RD_top3)
+        # print
+        #
+        # time2RD_random = time.time()
+        # RD_random = get_redistributed(G, random_edges)
+        # print "Extracted Random RD in %s sec" %(time.time() - time2RD_random)
+        # print
+        #
+        # time2RD_mpst = time.time()
+        # RD_mpst = get_redistributed(G, mpst_edges)
+        # print "Extracted MPST RD in %s sec" %(time.time() - time2RD_mpst)
+        # print
 
         # time2RD_ABM1uncertain = time.time()
         # RD_ADR = get_graph_from_file("Sparsified_results/ADR_redistribution/ADR%suncertain_hep15233_2.txt" %((track-1)*10))
@@ -682,36 +749,36 @@ if __name__ == "__main__":
         # print
 
         # with distribution
-
-        time2SP_toprel = time.time()
-        RD_top_rel = get_rel_with_mc(RD_top, MC, pairs, cutoff_multiplier=0)
-        # SP_top_rel = get_rel_for_pw(SP_top, pairs)
-        print "Calculated RD_top MC reliability  in %s sec" %(time.time() - time2SP_toprel)
-        print
-
-        time2SP_top2rel = time.time()
-        RD_top2_rel = get_rel_with_mc(RD_top2, MC, pairs, cutoff_multiplier=0)
-        # SP_top2_rel = get_rel_for_pw(SP_top2, pairs)
-        print "Calculated SP_top2 MC reliability  in %s sec" %(time.time() - time2SP_top2rel)
-        print
-
-        time2SP_top3rel = time.time()
-        RD_top3_rel = get_rel_with_mc(RD_top3, MC, pairs, cutoff_multiplier=0)
-        # SP_top3_rel = get_rel_for_pw(SP_top3, pairs)
-        print "Calculated SP_top3 MC reliability  in %s sec" %(time.time() - time2SP_top3rel)
-        print
-
-        time2SP_Randomrel = time.time()
-        RD_random_rel = get_rel_with_mc(RD_random, MC, pairs, cutoff_multiplier=0)
-        # SP_random_rel = get_rel_for_pw(SP_random, pairs)
-        print "Calculated SP_random MC reliability  in %s sec" %(time.time() - time2SP_Randomrel)
-        print
-
-        time2SP_mpstrel = time.time()
-        RD_mpst_rel = get_rel_with_mc(RD_mpst, MC, pairs, cutoff_multiplier=0)
-        # SP_mpst_rel = get_rel_for_pw(SP_mpst, pairs)
-        print "Calculated SP_mpst MC reliability  in %s sec" %(time.time() - time2SP_mpstrel)
-        print
+        #
+        # time2SP_toprel = time.time()
+        # RD_top_rel = get_rel_with_mc(RD_top, MC, pairs, cutoff_multiplier=0)
+        # # SP_top_rel = get_rel_for_pw(SP_top, pairs)
+        # print "Calculated RD_top MC reliability  in %s sec" %(time.time() - time2SP_toprel)
+        # print
+        #
+        # time2SP_top2rel = time.time()
+        # RD_top2_rel = get_rel_with_mc(RD_top2, MC, pairs, cutoff_multiplier=0)
+        # # SP_top2_rel = get_rel_for_pw(SP_top2, pairs)
+        # print "Calculated SP_top2 MC reliability  in %s sec" %(time.time() - time2SP_top2rel)
+        # print
+        #
+        # time2SP_top3rel = time.time()
+        # RD_top3_rel = get_rel_with_mc(RD_top3, MC, pairs, cutoff_multiplier=0)
+        # # SP_top3_rel = get_rel_for_pw(SP_top3, pairs)
+        # print "Calculated SP_top3 MC reliability  in %s sec" %(time.time() - time2SP_top3rel)
+        # print
+        #
+        # time2SP_Randomrel = time.time()
+        # RD_random_rel = get_rel_with_mc(RD_random, MC, pairs, cutoff_multiplier=0)
+        # # SP_random_rel = get_rel_for_pw(SP_random, pairs)
+        # print "Calculated SP_random MC reliability  in %s sec" %(time.time() - time2SP_Randomrel)
+        # print
+        #
+        # time2SP_mpstrel = time.time()
+        # RD_mpst_rel = get_rel_with_mc(RD_mpst, MC, pairs, cutoff_multiplier=0)
+        # # SP_mpst_rel = get_rel_for_pw(SP_mpst, pairs)
+        # print "Calculated SP_mpst MC reliability  in %s sec" %(time.time() - time2SP_mpstrel)
+        # print
 
         # time2SP_abm1uncertainrel = time.time()
         # RD_ADR_rel = get_rel_with_mc(RD_ADR, MC, pairs, cutoff_multiplier=0)
@@ -810,7 +877,7 @@ if __name__ == "__main__":
         #     json.dump(avg_ABM1_error, fp)
 
         # with redistribution
-        print "WITH DISTRIBUTION"
+        # print "WITH DISTRIBUTION"
 
         # time2Obj7 = time.time()
         # Obj7, avg_Obj7 = get_objective(G_rel1, RD_ADR_rel)
@@ -824,74 +891,74 @@ if __name__ == "__main__":
         #     json.dump(obj_ABM1uncertain_results, fp)
         # with open("Sparsified_results/Redistributed_ADR_MC%s_avg.txt" %MC, "w+") as fp:
         #     json.dump(avg_ABM1uncertain_error, fp)
+        #
+        # time2Obj8 = time.time()
+        # Obj8, avg_Obj8 = get_objective(G_rel1, RD_random_rel)
+        # print "Calculated MC-MC Random objective in %s sec" %(time.time() - time2Obj8)
+        # print "MC-MC Objective: %s; avg Objective: %s" %(Obj8, avg_Obj8)
+        # print
+        #
+        # obj_random_rd_results.update({(track-1)*10: Obj8})
+        # avg_random_rd_error.update({(track-1)*10: avg_Obj8})
+        # with open("Sparsified_results/Redistributed_Random_MC%s.txt" %MC, "w+") as fp:
+        #     json.dump(obj_random_rd_results, fp)
+        # with open("Sparsified_results/Redistributed_Random_MC%s_avg.txt" %MC, "w+") as fp:
+        #     json.dump(avg_random_rd_error, fp)
+        #
+        # time2Obj9 = time.time()
+        # Obj9, avg_Obj9 = get_objective(G_rel1, RD_top_rel)
+        # print "Calculated MC-MC Top objective in %s sec" %(time.time() - time2Obj9)
+        # print "MC-MC Objective: %s; avg Objective: %s" %(Obj9, avg_Obj9)
+        # print
+        #
+        # obj_top_rd_results.update({(track-1)*10: Obj9})
+        # avg_top_rd_error.update({(track-1)*10: avg_Obj9})
+        # with open("Sparsified_results/Redistributed_Top_MC%s.txt" %MC, "w+") as fp:
+        #     json.dump(obj_top_rd_results, fp)
+        # with open("Sparsified_results/Redistributed_Top_MC%s_avg.txt" %MC, "w+") as fp:
+        #     json.dump(avg_top_rd_error, fp)
+        #
+        # time2Obj10 = time.time()
+        # Obj10, avg_Obj10 = get_objective(G_rel1, RD_top2_rel)
+        # print "Calculated MC-MC Top2 objective in %s sec" %(time.time() - time2Obj10)
+        # print "MC-MC Objective: %s; avg Objective: %s" %(Obj10, avg_Obj10)
+        # print
+        #
+        # obj_top2_rd_results.update({(track-1)*10: Obj10})
+        # avg_top2_rd_error.update({(track-1)*10: avg_Obj10})
+        # with open("Sparsified_results/Redistributed_Top2_MC%s.txt" %MC, "w+") as fp:
+        #     json.dump(obj_top2_rd_results, fp)
+        # with open("Sparsified_results/Redistributed_Top2_MC%s_avg.txt" %MC, "w+") as fp:
+        #     json.dump(avg_top2_rd_error, fp)
+        #
+        # time2Obj11 = time.time()
+        # Obj11, avg_Obj11 = get_objective(G_rel1, RD_mpst_rel)
+        # print "Calculated MC-MC MPST objective in %s sec" %(time.time() - time2Obj11)
+        # print "MC-MC Objective: %s; avg Objective: %s" %(Obj11, avg_Obj11)
+        # print
+        #
+        # obj_mpst_rd_results.update({(track-1)*10: Obj11})
+        # avg_mpst_rd_error.update({(track-1)*10: avg_Obj11})
+        # with open("Sparsified_results/Redistributed_MPST_MC%s.txt" %MC, "w+") as fp:
+        #     json.dump(obj_mpst_rd_results, fp)
+        # with open("Sparsified_results/Redistributed_MPST_MC%s_avg.txt" %MC, "w+") as fp:
+        #     json.dump(avg_mpst_rd_error, fp)
+        #
+        # time2Obj12 = time.time()
+        # Obj12, avg_Obj12 = get_objective(G_rel1, RD_top3_rel)
+        # print "Calculated MC-MC Top3 objective in %s sec" %(time.time() - time2Obj12)
+        # print "MC-MC Objective: %s; avg Objective: %s" %(Obj12, avg_Obj12)
+        # print
+        #
+        # obj_top3_rd_results.update({(track-1)*10: Obj12})
+        # avg_top3_rd_error.update({(track-1)*10: avg_Obj12})
+        # with open("Sparsified_results/Redistributed_Top3_MC%s.txt" %MC, "w+") as fp:
+        #     json.dump(obj_top3_rd_results, fp)
+        # with open("Sparsified_results/Redistributed_Top3_MC%s_avg.txt" %MC, "w+") as fp:
+        #     json.dump(avg_top3_rd_error, fp)
 
-        time2Obj8 = time.time()
-        Obj8, avg_Obj8 = get_objective(G_rel1, RD_random_rel)
-        print "Calculated MC-MC Random objective in %s sec" %(time.time() - time2Obj8)
-        print "MC-MC Objective: %s; avg Objective: %s" %(Obj8, avg_Obj8)
         print
-
-        obj_random_rd_results.update({(track-1)*10: Obj8})
-        avg_random_rd_error.update({(track-1)*10: avg_Obj8})
-        with open("Sparsified_results/Redistributed_Random_MC%s.txt" %MC, "w+") as fp:
-            json.dump(obj_random_rd_results, fp)
-        with open("Sparsified_results/Redistributed_Random_MC%s_avg.txt" %MC, "w+") as fp:
-            json.dump(avg_random_rd_error, fp)
-
-        time2Obj9 = time.time()
-        Obj9, avg_Obj9 = get_objective(G_rel1, RD_top_rel)
-        print "Calculated MC-MC Top objective in %s sec" %(time.time() - time2Obj9)
-        print "MC-MC Objective: %s; avg Objective: %s" %(Obj9, avg_Obj9)
-        print
-
-        obj_top_rd_results.update({(track-1)*10: Obj9})
-        avg_top_rd_error.update({(track-1)*10: avg_Obj9})
-        with open("Sparsified_results/Redistributed_Top_MC%s.txt" %MC, "w+") as fp:
-            json.dump(obj_top_rd_results, fp)
-        with open("Sparsified_results/Redistributed_Top_MC%s_avg.txt" %MC, "w+") as fp:
-            json.dump(avg_top_rd_error, fp)
-
-        time2Obj10 = time.time()
-        Obj10, avg_Obj10 = get_objective(G_rel1, RD_top2_rel)
-        print "Calculated MC-MC Top2 objective in %s sec" %(time.time() - time2Obj10)
-        print "MC-MC Objective: %s; avg Objective: %s" %(Obj10, avg_Obj10)
-        print
-
-        obj_top2_rd_results.update({(track-1)*10: Obj10})
-        avg_top2_rd_error.update({(track-1)*10: avg_Obj10})
-        with open("Sparsified_results/Redistributed_Top2_MC%s.txt" %MC, "w+") as fp:
-            json.dump(obj_top2_rd_results, fp)
-        with open("Sparsified_results/Redistributed_Top2_MC%s_avg.txt" %MC, "w+") as fp:
-            json.dump(avg_top2_rd_error, fp)
-
-        time2Obj11 = time.time()
-        Obj11, avg_Obj11 = get_objective(G_rel1, RD_mpst_rel)
-        print "Calculated MC-MC MPST objective in %s sec" %(time.time() - time2Obj11)
-        print "MC-MC Objective: %s; avg Objective: %s" %(Obj11, avg_Obj11)
-        print
-
-        obj_mpst_rd_results.update({(track-1)*10: Obj11})
-        avg_mpst_rd_error.update({(track-1)*10: avg_Obj11})
-        with open("Sparsified_results/Redistributed_MPST_MC%s.txt" %MC, "w+") as fp:
-            json.dump(obj_mpst_rd_results, fp)
-        with open("Sparsified_results/Redistributed_MPST_MC%s_avg.txt" %MC, "w+") as fp:
-            json.dump(avg_mpst_rd_error, fp)
-
-        time2Obj12 = time.time()
-        Obj12, avg_Obj12 = get_objective(G_rel1, RD_top3_rel)
-        print "Calculated MC-MC Top3 objective in %s sec" %(time.time() - time2Obj12)
-        print "MC-MC Objective: %s; avg Objective: %s" %(Obj12, avg_Obj12)
-        print
-
-        obj_top3_rd_results.update({(track-1)*10: Obj12})
-        avg_top3_rd_error.update({(track-1)*10: avg_Obj12})
-        with open("Sparsified_results/Redistributed_Top3_MC%s.txt" %MC, "w+") as fp:
-            json.dump(obj_top3_rd_results, fp)
-        with open("Sparsified_results/Redistributed_Top3_MC%s_avg.txt" %MC, "w+") as fp:
-            json.dump(avg_top3_rd_error, fp)
-
-        print
-        print 'Spent %s for iteration' %(time.time() - time2track)
+        # print 'Spent %s for iteration' %(time.time() - time2track)
 
     print "Finished execution in %s sec" %(time.time() - time2execute)
 
