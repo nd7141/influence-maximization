@@ -13,6 +13,7 @@ from math import exp, log
 import random, time, sys, json
 from collections import Counter
 from itertools import product
+import branchings
 
 def _comprehension_flatten(iter_lst):
     return [item for lst in iter_lst for item in lst]
@@ -396,13 +397,16 @@ def get_sparsified_APSP(G, K, cutoff=None):
 
     return sorted_edges[:K]
 
-def get_sparsified_MP_MPST(G, K):
+def get_sparsified_MP_MPST(G, K, directed=False):
     '''
     Sparsify graph by first finding minimum spanning tree,
     then adding most probable edges.
     '''
     G_edges = G.edges(data=True)
-    MPST_edges = list(nx.minimum_spanning_edges(G,weight='weight',data=True))
+    if directed:
+        MPST_edges = branchings.minimum_spanning_arborescence(G, attr='weight').edges(data=True)
+    else:
+        MPST_edges = list(nx.minimum_spanning_edges(G,weight='weight',data=True))
     edges = [e for e in G_edges if e not in MPST_edges]
     mp_edges = sorted(edges,
                     key = lambda (u,v,d): exp(1)**(-d["weight"]),
@@ -412,6 +416,7 @@ def get_sparsified_MP_MPST(G, K):
     else:
         # remove edges that are adjacent to leaves (keeping connectivity)
         # if ties remove with lowest probability (keeping probability)
+        #TODO check why in case of directed MPST it doesn't work
         MPST = nx.Graph(MPST_edges)
         degrees = dict()
         leaves = set()
@@ -439,8 +444,10 @@ def get_sparsified_MP_MPST(G, K):
         # MPST_edges = MPST_edges[:K]
     return MPST_edges
 
-def get_graph_from_file(filename):
+def get_graph_from_file(filename, directed=False):
     SP = nx.Graph()
+    if directed:
+        SP = nx.DiGraph()
     with open(filename) as f:
         for line in f:
             u, v, p = map(float, line.split())
@@ -503,7 +510,7 @@ if __name__ == "__main__":
     time2execute = time.time()
 
     time2read = time.time()
-    G = get_graph_from_file("hep15233_2.txt")
+    G = get_graph_from_file("memeS/memeS.txt", True)
     print "Read graph in % sec" %(time.time() - time2read)
     print "G: n = %s m = %s" %(len(G), len(G.edges()))
     print
@@ -551,19 +558,19 @@ if __name__ == "__main__":
 
     MC = 100
 
-    G_rel1 = dict()
-    pairs = []
-    selected = dict()
-    with open("hep15233_2_rel.txt") as f:
-        for line in f:
-            u,v,r = line.split()
-            u = int(u)
-            v = int(v)
-            G_rel1[(u,v)] = float(r)
-            if not selected.get((u,v), False):
-                pairs.append((u,v))
-                selected[(v,u)] = True
-    print 'Total number of pairs: %s' %(len(pairs))
+    # G_rel1 = dict()
+    # pairs = []
+    # selected = dict()
+    # with open("hep15233_2_rel.txt") as f:
+    #     for line in f:
+    #         u,v,r = line.split()
+    #         u = int(u)
+    #         v = int(v)
+    #         G_rel1[(u,v)] = float(r)
+    #         if not selected.get((u,v), False):
+    #             pairs.append((u,v))
+    #             selected[(v,u)] = True
+    # print 'Total number of pairs: %s' %(len(pairs))
 
     # print 'Finding edge reliabilities...'
     # edge_rel = get_rel_with_mc(G, MC, pairs=G.edges(), cutoff_multiplier= 0)
@@ -618,7 +625,7 @@ if __name__ == "__main__":
     # mpst_edges_full = get_sparsified_mpst(MPSTs, len(G.edges()))
     # print 'Sparsified MPST in %s sec' %(time.time() - time2mpst)
 
-    for track in range(4, 5):
+    for track in range(1,11):
         time2track = time.time()
         print '------------------------------------'
         print 'Step %s' %track
@@ -627,11 +634,13 @@ if __name__ == "__main__":
         # K = 5*int(P)
         print 'K:', K, "|G|:", len(G.edges())
 
-        # edges = get_sparsified_MP_MPST(G, K)
-        # with open("Sparsified_results/Sparsified_graph/MPST/hep15233_2_K%s.txt" %((track-1)*10), "w+") as f:
-        #     for (u,v,d) in edges:
-        #         f.write("%d %d %s\n" %(u, v, exp(-d["weight"])))
-        #         f.write("%d %d %s\n" %(v, u, exp(-d["weight"])))
+        edges = get_sparsified_MP_MPST(G, K, True) # Note directed graph
+        with open("memeS/MPST/K%s.txt" %((track-1)*10), "w+") as f:
+            for (u,v,d) in edges:
+                f.write("%d %d %s\n" %(u,v,exp(-d["weight"])))
+        with open("memeS/MPST/attrK%s.txt" %((track-1)*10), "w+") as f:
+            f.write("n=%s\n" %len(G))
+            f.write("m=%s\n" %(K))
 
         # get sparsified edges
         # top_edges = top_edges_full[:K]
@@ -958,7 +967,7 @@ if __name__ == "__main__":
         #     json.dump(avg_top3_rd_error, fp)
 
         print
-        # print 'Spent %s for iteration' %(time.time() - time2track)
+        print 'Spent %s for iteration' %(time.time() - time2track)
 
     print "Finished execution in %s sec" %(time.time() - time2execute)
 
