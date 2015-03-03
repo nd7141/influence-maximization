@@ -444,6 +444,27 @@ def get_sparsified_MP_MPST(G, K, directed=False):
         # MPST_edges = MPST_edges[:K]
     return MPST_edges
 
+def ChungLu(G):
+    '''
+    Compute Chung-Lu probabilities.
+    Uses expected degrees of G as weights.
+
+    Expected to have -log(p_e) as weights in G.
+    '''
+    w = dict() # expected degrees of nodes
+    for u in G:
+        for v in G[u]:
+            p = exp(1)**(-G[u][v]["weight"])
+            w[u] = w.get(u, 0) + p
+    W = sum(w.values())
+    CL = dict() # Chung-Lu probabilities
+    for u in G:
+        for v in G:
+            CL[(u,v)] = w[u]*w[v]/W
+            if u == v:
+                CL[(u,v)] /= 2
+    return CL
+
 def get_graph_from_file(filename, directed=False):
     SP = nx.Graph()
     if directed:
@@ -556,6 +577,12 @@ if __name__ == "__main__":
     # print "Extracted MPST PW in %s sec" %(time.time() - time2PW)
     # print
 
+    G = nx.Graph()
+    G.add_edge(0, 1, weight=-log(.1))
+    G.add_edge(1,2, weight=-log(.2))
+    CL = ChungLu(G)
+    print CL
+
     MC = 100
 
     # G_rel1 = dict()
@@ -634,13 +661,13 @@ if __name__ == "__main__":
         # K = 5*int(P)
         print 'K:', K, "|G|:", len(G.edges())
 
-        edges = get_sparsified_MP_MPST(G, K, True) # Note directed graph
-        with open("memeS/MPST/K%s.txt" %((track-1)*10), "w+") as f:
-            for (u,v,d) in edges:
-                f.write("%d %d %s\n" %(u,v,exp(-d["weight"])))
-        with open("memeS/MPST/attrK%s.txt" %((track-1)*10), "w+") as f:
-            f.write("n=%s\n" %len(G))
-            f.write("m=%s\n" %(K))
+        # edges = get_sparsified_MP_MPST(G, K, True) # Note directed graph
+        # with open("memeS/MPST/K%s.txt" %((track-1)*10), "w+") as f:
+        #     for (u,v,d) in edges:
+        #         f.write("%d %d %s\n" %(u,v,exp(-d["weight"])))
+        # with open("memeS/MPST/attrK%s.txt" %((track-1)*10), "w+") as f:
+        #     f.write("n=%s\n" %len(G))
+        #     f.write("m=%s\n" %(K))
 
         # get sparsified edges
         # top_edges = top_edges_full[:K]
