@@ -527,40 +527,49 @@ def get_redistributed(G, selected_edges):
     RD.add_weighted_edges_from(new_edges)
     return RD
 
-def save_for_LP(f1, f2, G):
+def save_for_LP(f1, f2, G, f3 = "edge_order.txt", f4 = "node_order.txt"):
     '''
     Saves matrix A and vector b to files f1 and f2,
     for linear programming min||Ax - b||, s.t. 0 <= x <= 1 in MATLAB.
 
+    Save edge order to f3
+
     Expected to have -log(p_e) as weights in G.
     '''
+
+
+    edge_order = dict()
+    for i, e in enumerate(G.edges()):
+        edge_order[(e[0],e[1])] = i + 1
+    node_order = dict()
+    for i, u in enumerate(G):
+        node_order[u] = i + 1
     wi = dict()
     for u in G:
         wi[u] = sum([exp(1)**(-G[u][v]["weight"]) for v in G[u]])
-    edge_order = dict()
-    count = 1
-    for e in G.edges():
-        edge_order[count] = (e[0],e[1])
-        count += 1
-    with open(f1, "a+") as f:
-        for i in range(1, count):
-            e1, e2 = edge_order[i]
-            f.write("%s %s %s\n" %(e1 + 1, i, 1))
-            f.write("%s %s %s\n" %(e2 + 1, i, 1))
-    with open(f2, "a+") as g:
-        for node in range(len(G)):
-            g.write("%s %s %s\n" %(node+1, 1, wi[node]))
-    with open("edge_order.txt", "w+") as f:
-        for i in range(1, count):
-            e1, e2 = edge_order[i]
-            f.write("%s %s %s\n" %(i, e1, e2))
+
+    with open(f1, "w+") as f:
+        for e in G.edges():
+            e1, e2 = e[0], e[1]
+            f.write("%s %s %s\n" %(node_order[e1], edge_order[(e1, e2)], 1))
+            f.write("%s %s %s\n" %(node_order[e2], edge_order[(e1, e2)], 1))
+    with open(f2, "w+") as f:
+        for u in G:
+            f.write("%s %s %s\n" %(node_order[u], 1, wi[u]))
+    with open(f3, "w+") as f:
+        for e in G.edges():
+            f.write("%s %s %s\n" %(e[0], e[1], edge_order[(e[0],e[1])]))
+    with open(f4, "w+") as f:
+        for u in G:
+            f.write("%s %s\n" %(u, node_order[u]))
+    # TODO test correctness on protein network
 
 
 if __name__ == "__main__":
     time2execute = time.time()
 
     time2read = time.time()
-    G = get_graph_from_file("memeS/memeS.txt", True)
+    G = get_graph_from_file("fb.txt", True)
     print "Read graph in % sec" %(time.time() - time2read)
     print "G: n = %s m = %s" %(len(G), len(G.edges()))
     print
@@ -589,14 +598,12 @@ if __name__ == "__main__":
     # pairs = [(0,1)]
 
     # # protein graph
-    G = nx.Graph()
-    G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
-
-    G.add_edge(0, 4, weight=-log(.1))
-    G.add_edge(4, 5, weight=-log(.15))
-    G.add_edge(5, 6, weight=-log(0.5))
-
-    save_for_LP("A.dat", "b.dat", G)
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+    #
+    # G.add_edge(0, 4, weight=-log(.1))
+    # G.add_edge(4, 5, weight=-log(.15))
+    # G.add_edge(5, 6, weight=-log(0.5))
 
     # time2sp = time.time()
     # get_sparsified_MP_MPST(G, int(len(G.edges())/2 + 1000))
@@ -661,9 +668,14 @@ if __name__ == "__main__":
     obj_mpst_rd_results = dict()
 
     # get sparsified edges
-    # time2top = time.time()
-    # top_edges_full = get_sparsified_top(G, int(len(G.edges())/10*2))
-    # print 'Sparsified Top in %s sec' %(time.time() - time2top)
+    time2top = time.time()
+    top_edges_full = get_sparsified_top(G, int(len(G.edges())/10))
+    print 'Sparsified Top in %s sec' %(time.time() - time2top)
+    SP_top = nx.Graph()
+    SP_top.add_edges_from(top_edges_full)
+
+    save_for_LP("A.dat", "b.dat", SP_top)
+
     # # with distribution
     # time2RD_top = time.time()
     # RD_top = get_redistributed(G, top_edges_full)
@@ -685,12 +697,12 @@ if __name__ == "__main__":
 
     for track in range(1,11):
         time2track = time.time()
-        print '------------------------------------'
-        print 'Step %s' %track
-        K = int(track*percentage*len(G.edges()))
-        track += 1
-        # K = 5*int(P)
-        print 'K:', K, "|G|:", len(G.edges())
+        # print '------------------------------------'
+        # print 'Step %s' %track
+        # K = int(track*percentage*len(G.edges()))
+        # track += 1
+        # # K = 5*int(P)
+        # print 'K:', K, "|G|:", len(G.edges())
 
         # edges = get_sparsified_MP_MPST(G, K, True) # Note directed graph
         # with open("memeS/MPST/K%s.txt" %((track-1)*10), "w+") as f:
