@@ -562,8 +562,27 @@ def save_for_LP(f1, f2, G, f3 = "edge_order.txt", f4 = "node_order.txt"):
     with open(f4, "w+") as f:
         for u in G:
             f.write("%s %s\n" %(u, node_order[u]))
-    # TODO test correctness on protein network
 
+def calculate_obj(edge_order, x, G):
+    '''
+    Calculate average discrepancy of expected degree.
+    x -- a vector calculated from LP (matlab).
+
+    Expected to have -log(p_e) as weights in G.
+    '''
+    diff = 0
+    all_edges = set(G.edges())
+    selected_edges = set(edge_order)
+    left_edges = all_edges.difference(selected_edges)
+    for i, e in enumerate(edge_order):
+        p_true = exp(1)**(-G[e[0]][e[1]]["weight"])
+        p_approx = x[i]
+        diff += abs(p_true - p_approx)
+        print p_true, p_approx
+    # for e in left_edges:
+    #     p_true = exp(1)**(-G[e[0]][e[1]]["weight"])
+    #     diff += abs(p_true - 0)
+    return diff/len(x)
 
 if __name__ == "__main__":
     time2execute = time.time()
@@ -600,10 +619,11 @@ if __name__ == "__main__":
     # # protein graph
     # G = nx.Graph()
     # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
-    #
+
     # G.add_edge(0, 4, weight=-log(.1))
     # G.add_edge(4, 5, weight=-log(.15))
     # G.add_edge(5, 6, weight=-log(0.5))
+
 
     # time2sp = time.time()
     # get_sparsified_MP_MPST(G, int(len(G.edges())/2 + 1000))
@@ -668,13 +688,34 @@ if __name__ == "__main__":
     obj_mpst_rd_results = dict()
 
     # get sparsified edges
-    time2top = time.time()
-    top_edges_full = get_sparsified_top(G, int(len(G.edges())/10))
-    print 'Sparsified Top in %s sec' %(time.time() - time2top)
-    SP_top = nx.Graph()
-    SP_top.add_edges_from(top_edges_full)
+    # for i in range(1, 11):
+    #     time2top = time.time()
+    #     top_edges_full = get_sparsified_top(G, int(i*len(G.edges())/10))
+    #     print 'Sparsified Top in %s sec' %(time.time() - time2top)
+    #     SP_top = nx.Graph()
+    #     SP_top.add_edges_from(top_edges_full)
+    #     print len(SP_top), len(SP_top.edges())
+    #
+    #     track = i*10
+    #
+    #     save_for_LP("LP/A%s.dat" %track, "LP/b%s.dat" %track, SP_top, "LP/edge_order%s.txt" %track)
 
-    save_for_LP("A.dat", "b.dat", SP_top)
+    for i in range(10,11):
+        track = i*10
+        edge_order = []
+        with open("LP/edge_order%s.txt" %track) as f:
+            for line in f:
+                d = line.split()
+                e = tuple(map(int, (d[0], d[1])))
+                edge_order.append(e)
+        x = []
+        with open("LP/x%s.txt" %track) as f:
+            for line in f:
+                x.append(float(line))
+        print track, ":", calculate_obj(edge_order, x, G)
+
+
+    # save_for_LP("A.dat", "b.dat", SP_top)
 
     # # with distribution
     # time2RD_top = time.time()
