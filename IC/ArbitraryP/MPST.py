@@ -444,6 +444,50 @@ def get_sparsified_MP_MPST(G, K, directed=False):
         # MPST_edges = MPST_edges[:K]
     return MPST_edges
 
+def get_sparsified_MPSTplus(G, K):
+    '''
+    Sparsify graph using most probable spanning tree.
+    If K < |MPST|, then add most probable edges that are not included.
+    If K > |MPST|, then remove edges based on the number of neighbors
+    for endpoints of the edges.
+
+    :param G: undirected graph with -log(p_e) on edges
+    :param K: number of edges to preserve
+    :return: edges with probabilities -log(p_e) of size K
+    '''
+    G_edges = G.edges(data=True)
+    MPST_edges = list(nx.minimum_spanning_edges(G,weight='weight',data=True))
+    edges = [e for e in G_edges if e not in MPST_edges]
+    mp_edges = sorted(edges,
+                    key = lambda (u,v,d): exp(1)**(-d["weight"]),
+                    reverse = True)
+    if len(MPST_edges) <= K:
+        MPST_edges.extend(mp_edges[:(K - len(MPST_edges))])
+    else:
+        # remove edges that are adjacent to leaves (keeping connectivity)
+        # if ties remove with lowest probability (keeping probability)
+        MPST = nx.Graph()
+        MPST.add_weighted_edges_from(MPST_edges)
+        power = {(e[0], e[1]): len(MPST[e[0]]) + len(MPST[e[1]]) for e in MPST_edges} # sum of neighbors of endpoints of an edge
+        while len(MPST.edges()) > K:
+            e, val = max(power.iteritems(), key = lambda (k,v): v)
+            print e, val
+            power.pop(e)
+            MPST.remove_edge(*e)
+            for adj in MPST.edges([e[0]]):
+                try:
+                    power[adj] -= 1
+                except KeyError:
+                    power[(adj[0], adj[1])] -= 1
+            for adj in MPST.edges(e[1]):
+                try:
+                    power[adj] -= 1
+                except KeyError:
+                    power[(adj[0], adj[1])] -= 1
+        MPST_edges = MPST.edges()
+    return MPST_edges
+
+
 def ChungLu(G):
     '''
     Compute Chung-Lu probabilities.
@@ -561,6 +605,7 @@ def save_for_LP(f1, f2, G, G_orig, f3 = "edge_order.txt", f4 = "D.txt"):
             f.write("%s %s %s\n" %(e[0], e[1], edge_order[(e[0],e[1])]))
 
     nodes = set(G_orig).difference(G)
+    print "# nodes: ", len(nodes),
     d = dict() # degree of remaining nodes
     for u in nodes:
         d[u] = 0
@@ -568,6 +613,7 @@ def save_for_LP(f1, f2, G, G_orig, f3 = "edge_order.txt", f4 = "D.txt"):
             p = exp(1)**(-G_orig[u][v]["weight"])
             d[u] += p
     surplus = sum(d.values())
+    print "surplus", surplus
     with open(f4, "w+") as f:
         f.write('%s\n' %len(G_orig))
         f.write('%s\n' %surplus)
@@ -576,10 +622,12 @@ if __name__ == "__main__":
     time2execute = time.time()
 
     time2read = time.time()
-    G = get_graph_from_file("fb.txt", True)
+    G = get_graph_from_file("fb.txt", False)
     print "Read graph in % sec" %(time.time() - time2read)
     print "G: n = %s m = %s" %(len(G), len(G.edges()))
     print
+
+    get_sparsified_MPSTplus(G, len(G) - 10)
 
     time2pairs = time.time()
     G_rel_mc = dict()
@@ -690,18 +738,18 @@ if __name__ == "__main__":
     obj_mpst_rd_results = dict()
 
     # get sparsified edges
-    for i in range(1, 11):
-        time2top = time.time()
-        top_edges_full = get_sparsified_top(G, int(i*len(G.edges())/10))
-        print 'Sparsified Top in %s sec' %(time.time() - time2top)
-        SP_top = nx.Graph()
-        SP_top.add_edges_from(top_edges_full)
-        print len(SP_top), len(SP_top.edges())
-
-        track = i*10
-
-        save_for_LP("LP/A%s.dat" %track, "LP/b%s.dat" %track, SP_top, G,
-                    "LP/de%s.dat" %track, "LP/D%s.dat" %track)
+    # for i in range(1, 11):
+    #     time2top = time.time()
+    #     top_edges_full = get_sparsified_top(G, int(i*len(G.edges())/10))
+    #     print 'Sparsified Top in %s sec' %(time.time() - time2top)
+    #     SP_top = nx.Graph()
+    #     SP_top.add_edges_from(top_edges_full)
+    #     print len(SP_top), len(SP_top.edges())
+    #
+    #     track = i*10
+    #
+    #     save_for_LP("LP/A%s.dat" %track, "LP/b%s.dat" %track, SP_top, G,
+    #                 "LP/de%s.dat" %track, "LP/D%s.dat" %track)
 
 
     # save_for_LP("A.dat", "b.dat", SP_top)
