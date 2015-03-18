@@ -13,7 +13,6 @@ from math import exp, log
 import random, time, sys, json
 from collections import Counter
 from itertools import product
-import branchings
 
 def _comprehension_flatten(iter_lst):
     return [item for lst in iter_lst for item in lst]
@@ -404,7 +403,8 @@ def get_sparsified_MP_MPST(G, K, directed=False):
     '''
     G_edges = G.edges(data=True)
     if directed:
-        MPST_edges = branchings.minimum_spanning_arborescence(G, attr='weight').edges(data=True)
+        # MPST_edges = branchings.minimum_spanning_arborescence(G, attr='weight').edges(data=True)
+        pass
     else:
         MPST_edges = list(nx.minimum_spanning_edges(G,weight='weight',data=True))
     edges = [e for e in G_edges if e not in MPST_edges]
@@ -456,34 +456,54 @@ def get_sparsified_MPSTplus(G, K):
     :return: edges with probabilities -log(p_e) of size K
     '''
     G_edges = G.edges(data=True)
+    print 'Finding MPST'
     MPST_edges = list(nx.minimum_spanning_edges(G,weight='weight',data=True))
-    edges = [e for e in G_edges if e not in MPST_edges]
-    mp_edges = sorted(edges,
+    print 'Found spanning tree'
+    if len(MPST_edges) <= K:
+        edges = [e for e in G_edges if e not in MPST_edges]
+        mp_edges = sorted(edges,
                     key = lambda (u,v,d): exp(1)**(-d["weight"]),
                     reverse = True)
-    if len(MPST_edges) <= K:
+        print 'Finished sorting edges'
         MPST_edges.extend(mp_edges[:(K - len(MPST_edges))])
     else:
-        # remove edges that are adjacent to leaves (keeping connectivity)
-        # if ties remove with lowest probability (keeping probability)
+        #remove edges that will not make isolated vertices
+
         MPST = nx.Graph()
         MPST.add_weighted_edges_from(MPST_edges)
-        power = {(e[0], e[1]): len(MPST[e[0]]) + len(MPST[e[1]]) for e in MPST_edges} # sum of neighbors of endpoints of an edge
+        # edges where both endpoints have at least 2 edges
+        power1 = {tuple(sorted((e[0],e[1]))): len(MPST[e[0]]) + len(MPST[e[1]]) - 2 for e in MPST.edges() if len(MPST[e[0]]) != 1 and len(MPST[e[1]]) != 1}
+        # edges where at least one vertex has only one edge
+        power2 = {tuple(sorted((e[0],e[1]))): len(MPST[e[0]]) + len(MPST[e[1]]) - 2 for e in MPST.edges() if len(MPST[e[0]]) == 1 or len(MPST[e[1]]) == 1}
+
+        def _decrease_power(MPST, endpoint, power1, power2):
+            for node in MPST[endpoint]:
+                edge = tuple(sorted((endpoint, node)))
+                if edge in power1:
+                    power1[edge] -= 1
+                elif edge in power2:
+                    power2[edge] -= 1
+                else:
+                    raise ValueError, "Edge %s should be in MPST" %edge
+
         while len(MPST.edges()) > K:
-            e, val = max(power.iteritems(), key = lambda (k,v): v)
-            print e, val
-            power.pop(e)
-            MPST.remove_edge(*e)
-            for adj in MPST.edges([e[0]]):
-                try:
-                    power[adj] -= 1
-                except KeyError:
-                    power[(adj[0], adj[1])] -= 1
-            for adj in MPST.edges(e[1]):
-                try:
-                    power[adj] -= 1
-                except KeyError:
-                    power[(adj[0], adj[1])] -= 1
+            if len(power1) > 0:
+                e, val = max(power1.iteritems(), key = lambda(dk, dv): dv)
+                print e, val
+                power1.pop(e)
+                MPST.remove_edge(e[0],e[1])
+                _decrease_power(MPST, e[0], power1, power2)
+                _decrease_power(MPST, e[1], power1, power2)
+            elif len(power2) > 0:
+                e, val = max(power2.iteritems(), key = lambda(dk, dv): dv)
+                print e, val
+                power2.pop(e)
+                MPST.remove_edge(e[0],e[1])
+                _decrease_power(MPST, e[0], power1, power2)
+                _decrease_power(MPST, e[1], power1, power2)
+            else:
+                raise ValueError, "No more edges"
+
         MPST_edges = MPST.edges()
     return MPST_edges
 
@@ -622,12 +642,13 @@ if __name__ == "__main__":
     time2execute = time.time()
 
     time2read = time.time()
-    G = get_graph_from_file("fb.txt", False)
+    flickr = "Flickr.txt_reduced-FF_5000.txt"
+    G = get_graph_from_file(flickr, False)
     print "Read graph in % sec" %(time.time() - time2read)
     print "G: n = %s m = %s" %(len(G), len(G.edges()))
     print
 
-    get_sparsified_MPSTplus(G, len(G) - 10)
+    get_sparsified_MPSTplus(G, 4950)
 
     time2pairs = time.time()
     G_rel_mc = dict()
@@ -673,6 +694,10 @@ if __name__ == "__main__":
     #     for line in f:
     #         x.append(float(line))
     # print calculate_obj(edge_order, x, G)
+
+    G = nx.Graph()
+    G.add_weighted_edges_from([(1,2,-log(.5)),(2,4,-log(.5)),(4,3,-log(.5)),(4,5,-log(.5)),(5,7,-log(.5)),(5,6,-log(.5))])
+    get_sparsified_MPSTplus(G, 2)
 
 
     # time2sp = time.time()
