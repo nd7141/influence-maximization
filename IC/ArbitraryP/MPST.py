@@ -460,6 +460,7 @@ def get_sparsified_MPSTplus(G, K):
     MPST_edges = list(nx.minimum_spanning_edges(G,weight='weight',data=True))
     print 'Found spanning tree'
     if len(MPST_edges) <= K:
+        print 'Start sorting remaining edges'
         edges = [e for e in G_edges if e not in MPST_edges]
         mp_edges = sorted(edges,
                     key = lambda (u,v,d): exp(1)**(-d["weight"]),
@@ -489,14 +490,14 @@ def get_sparsified_MPSTplus(G, K):
         while len(MPST.edges()) > K:
             if len(power1) > 0:
                 e, val = max(power1.iteritems(), key = lambda(dk, dv): dv)
-                print e, val
+                # print e, val
                 power1.pop(e)
                 MPST.remove_edge(e[0],e[1])
                 _decrease_power(MPST, e[0], power1, power2)
                 _decrease_power(MPST, e[1], power1, power2)
             elif len(power2) > 0:
                 e, val = max(power2.iteritems(), key = lambda(dk, dv): dv)
-                print e, val
+                # print e, val
                 power2.pop(e)
                 MPST.remove_edge(e[0],e[1])
                 _decrease_power(MPST, e[0], power1, power2)
@@ -507,6 +508,41 @@ def get_sparsified_MPSTplus(G, K):
         MPST_edges = MPST.edges()
     return MPST_edges
 
+def get_edges_greedy_min(G,K):
+    '''
+    Selects an edge based on max loss of objective. Assigns mean of degrees of endpoints.
+    :param G: graph
+    :param K: number of edges
+    :return:
+    '''
+    # calculate expected degrees
+    d = dict()
+    for v in G:
+        for u in G[v]:
+            d[v] = d.get(v, 0) + exp(1)**(-G[v][u]['weight'])
+    # initialize current degree
+    cur_d = {v: 0 for v in G}
+
+    edges = dict()
+
+    while len(edges) < K:
+        max_prob = 0
+        max_edge = None
+        for e in G.edges():
+            edge = tuple(sorted(e))
+            if edge not in edges:
+                e_prob = min((abs(d[edge[0]] - cur_d[edge[0]]) + abs(d[edge[1]] - cur_d[edge[1]]))/2, 1)
+                if e_prob >= max_prob:
+                    max_prob = e_prob
+                    max_edge = edge
+        if max_edge == None:
+            raise ValueError, "Cannot find an edge"
+        print max_edge, max_prob
+        edges[max_edge] = max_prob
+        cur_d[max_edge[0]] += max_prob
+        cur_d[max_edge[1]] += max_prob
+
+    return edges
 
 def ChungLu(G):
     '''
@@ -648,7 +684,10 @@ if __name__ == "__main__":
     print "G: n = %s m = %s" %(len(G), len(G.edges()))
     print
 
-    get_sparsified_MPSTplus(G, 4950)
+    # time2sparsify = time.time()
+    # get_sparsified_MPSTplus(G, int(len(G.edges())/10))
+    # print 'Time to sparsify', time.time() - time2sparsify
+
 
     time2pairs = time.time()
     G_rel_mc = dict()
@@ -695,9 +734,9 @@ if __name__ == "__main__":
     #         x.append(float(line))
     # print calculate_obj(edge_order, x, G)
 
-    G = nx.Graph()
-    G.add_weighted_edges_from([(1,2,-log(.5)),(2,4,-log(.5)),(4,3,-log(.5)),(4,5,-log(.5)),(5,7,-log(.5)),(5,6,-log(.5))])
-    get_sparsified_MPSTplus(G, 2)
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(1,2,-log(.5)),(2,4,-log(.5)),(4,3,-log(.5)),(4,5,-log(.5)),(5,7,-log(.5)),(5,6,-log(.5))])
+    # get_edges_greedy_min(G, 6)
 
 
     # time2sp = time.time()
@@ -763,18 +802,18 @@ if __name__ == "__main__":
     obj_mpst_rd_results = dict()
 
     # get sparsified edges
-    # for i in range(1, 11):
-    #     time2top = time.time()
-    #     top_edges_full = get_sparsified_top(G, int(i*len(G.edges())/10))
-    #     print 'Sparsified Top in %s sec' %(time.time() - time2top)
-    #     SP_top = nx.Graph()
-    #     SP_top.add_edges_from(top_edges_full)
-    #     print len(SP_top), len(SP_top.edges())
-    #
-    #     track = i*10
-    #
-    #     save_for_LP("LP/A%s.dat" %track, "LP/b%s.dat" %track, SP_top, G,
-    #                 "LP/de%s.dat" %track, "LP/D%s.dat" %track)
+    for i in range(1, 11):
+        time2top = time.time()
+        top_edges_full = get_sparsified_MPSTplus(G, int(i*len(G.edges())/100))
+        print 'Sparsified Top in %s sec' %(time.time() - time2top)
+        SP_top = nx.Graph()
+        SP_top.add_edges_from(top_edges_full)
+        print len(SP_top), len(SP_top.edges())
+
+        track = i*10
+
+        save_for_LP("LP/A%s.dat" %track, "LP/b%s.dat" %track, SP_top, G,
+                    "LP/edge_order%s.dat" %track, "LP/D%s.dat" %track)
 
 
     # save_for_LP("A.dat", "b.dat", SP_top)

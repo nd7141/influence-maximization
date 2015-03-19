@@ -1,5 +1,8 @@
 clear all; 
 
+fmae = strcat('LP/mae1MPST.dat');
+dlmwrite(fmae, []);
+
 for i=10:10:100
     fA = strcat('LP/A', num2str(i), '.dat');
     fb = strcat('LP/b', num2str(i), '.dat');
@@ -25,29 +28,6 @@ for i=10:10:100
 
     a = sum(abs(d - A1*x)); % sum of discreapncies of non-sparsified nodes
     mae = (s + a)/n;
-
-    fmae = strcat('LP/mae.dat');
-    dlmwrite(fmae, [i, mae], '-append');
+    
+    dlmwrite(fmae, [i/10, mae], '-append');
 end
-
-% load('A.dat');
-% load('b.dat');
-% exp_d = load('exp_degree.txt');
-% D = load('surplus.txt');
-% 
-% A1 = spconvert(A);
-% d = spconvert(b);
-% w = spconvert(exp_d);
-% 
-% m = size(A1,2);
-% 
-% f = -ones(1,m);
-% 
-% tic
-% [x, fval] = linprog(f, A1, d, [], [], zeros(m,1), ones(m,1));
-% toc 
-% 
-% mae = mean(abs(w - A1*x));
-% 
-% fx = strcat('mae', '.txt');
-% dlmwrite(fx, D + mae);
