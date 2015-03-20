@@ -1,6 +1,6 @@
 clear all; 
 
-fmae = strcat('LP/mae1MPST.dat');
+fmae = strcat('LP/mae01MP.dat');
 dlmwrite(fmae, []);
 
 for i=10:10:100
@@ -29,5 +29,5 @@ for i=10:10:100
     a = sum(abs(d - A1*x)); % sum of discreapncies of non-sparsified nodes
     mae = (s + a)/n;
     
-    dlmwrite(fmae, [i/10, mae], '-append');
+    dlmwrite(fmae, [i/100, mae], '-append');
 end

@@ -13,6 +13,8 @@ from math import exp, log
 import random, time, sys, json
 from collections import Counter
 from itertools import product
+import matplotlib.pyplot as plt
+import matplotlib
 
 def _comprehension_flatten(iter_lst):
     return [item for lst in iter_lst for item in lst]
@@ -471,7 +473,7 @@ def get_sparsified_MPSTplus(G, K):
         #remove edges that will not make isolated vertices
 
         MPST = nx.Graph()
-        MPST.add_weighted_edges_from(MPST_edges)
+        MPST.add_edges_from(MPST_edges)
         # edges where both endpoints have at least 2 edges
         power1 = {tuple(sorted((e[0],e[1]))): len(MPST[e[0]]) + len(MPST[e[1]]) - 2 for e in MPST.edges() if len(MPST[e[0]]) != 1 and len(MPST[e[1]]) != 1}
         # edges where at least one vertex has only one edge
@@ -505,7 +507,7 @@ def get_sparsified_MPSTplus(G, K):
             else:
                 raise ValueError, "No more edges"
 
-        MPST_edges = MPST.edges()
+        MPST_edges = MPST.edges(data=True)
     return MPST_edges
 
 def get_edges_greedy_min(G,K):
@@ -564,6 +566,52 @@ def ChungLu(G):
             if u == v:
                 CL[(u,v)] /= 2
     return CL
+
+def exp_degrees(G, directed=False):
+    '''
+    Expected to have -log(p_e) as weights in G.
+    :param G:
+    :return:
+    '''
+    if not directed:
+        exp_d = dict(zip(G, [0]*len(G)))
+        for v in G:
+            p = 0
+            for u in G[v]:
+                p += exp(1)**(-G[v][u]['weight'])
+            exp_d[v] = p
+        return exp_d
+    else:
+        in_d = dict(zip(G, [0]*len(G)))
+        out_d = dict(zip(G, [0]*len(G)))
+        for v in G:
+            for u in G[v]:
+                out_d[v] += exp(1)**(-G[v][u]['weight'])
+                in_d[u] += exp(1)**(-G[v][u]['weight'])
+        return in_d, out_d
+
+#TODO check function
+def pres_dir_degrees(edges, degrees, dir="in"):
+    '''
+    Preserve directed degrees
+    :param edges:
+    :param in_degrees: dictionary of expected in_degrees
+    :return: Q -- graph from edges with preserved in_degrees
+    '''
+    Q = nx.DiGraph()
+    Q.add_edges_from(edges)
+    for e in edges:
+        denom = 0
+        if dir == "out":
+            for (v,_) in Q.out_edges(e[0]):
+                denom += degrees[v]
+        elif dir == "in":
+            for (v,_) in Q.in_edges(e[0]):
+                denom += degrees[v]
+        p = degrees[e[0]]*degrees[e[1]]/denom
+        Q.add_edge(e[0],e[1],{"weight": -log(p)})
+    return Q
+
 
 def get_graph_from_file(filename, directed=False):
     SP = nx.Graph()
@@ -677,12 +725,12 @@ def save_for_LP(f1, f2, G, G_orig, f3 = "edge_order.txt", f4 = "D.txt"):
 if __name__ == "__main__":
     time2execute = time.time()
 
-    time2read = time.time()
-    flickr = "Flickr.txt_reduced-FF_5000.txt"
-    G = get_graph_from_file(flickr, False)
-    print "Read graph in % sec" %(time.time() - time2read)
-    print "G: n = %s m = %s" %(len(G), len(G.edges()))
-    print
+    # time2read = time.time()
+    # flickr = "Flickr.txt_reduced-FF_5000.txt"
+    # G = get_graph_from_file(flickr, False)
+    # print "Read graph in % sec" %(time.time() - time2read)
+    # print "G: n = %s m = %s" %(len(G), len(G.edges()))
+    # print
 
     # time2sparsify = time.time()
     # get_sparsified_MPSTplus(G, int(len(G.edges())/10))
@@ -690,7 +738,7 @@ if __name__ == "__main__":
 
 
     time2pairs = time.time()
-    G_rel_mc = dict()
+    # G_rel_mc = dict()
     # l = 10000
     # pairs = _make_pairs(G, l)
     # print 'Made %s pairs in %s sec' %(l, time.time() - time2pairs)
@@ -713,12 +761,29 @@ if __name__ == "__main__":
     # pairs = [(0,1)]
 
     # # protein graph
-    # G = nx.Graph()
-    # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
-    #
-    # G.add_edge(0, 4, weight=-log(.1))
-    # G.add_edge(4, 5, weight=-log(.15))
-    # G.add_edge(5, 6, weight=-log(0.5))
+    G = nx.Graph()
+    G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+
+    G.add_edge(0, 4, weight=-log(.1))
+    G.add_edge(4, 5, weight=-log(.15))
+    G.add_edge(5, 6, weight=-log(0.5))
+
+    in_d, out_d = exp_degrees(G, True)
+    Q = pres_dir_degrees(nx.DiGraph(G).edges(), in_d)
+
+    Gp = nx.Graph()
+    for e in Q.edges(data=True):
+        p = -log(exp(1)**(-Q[e[1]][e[0]]['weight']))
+        Gp.add_edge(e[0],e[1],{'weight': p})
+
+    for e in G.edges():
+        print e, G[e[0]][e[1]]['weight']
+    print '-----------------'
+    for e in Gp.edges():
+        print e, Gp[e[0]][e[1]]['weight']
+    print exp_degrees(G)
+    print exp_degrees(Gp)
+    console = []
     #
     # save_for_LP("A.dat", "b.dat", G, G)
 
@@ -735,9 +800,9 @@ if __name__ == "__main__":
     # print calculate_obj(edge_order, x, G)
 
     # G = nx.Graph()
-    # G.add_weighted_edges_from([(1,2,-log(.5)),(2,4,-log(.5)),(4,3,-log(.5)),(4,5,-log(.5)),(5,7,-log(.5)),(5,6,-log(.5))])
-    # get_edges_greedy_min(G, 6)
-
+    # G.add_weighted_edges_from([(1,2,-log(.5)),(1,4,-log(.5)),(2,4,-log(.5)),(4,3,-log(.5)),(4,5,-log(.5)),(5,7,-log(.5)),(5,6,-log(.5))])
+    # # get_edges_greedy_min(G, 6)
+    # get_sparsified_MPSTplus(G, 2)
 
     # time2sp = time.time()
     # get_sparsified_MP_MPST(G, int(len(G.edges())/2 + 1000))
@@ -802,18 +867,18 @@ if __name__ == "__main__":
     obj_mpst_rd_results = dict()
 
     # get sparsified edges
-    for i in range(1, 11):
-        time2top = time.time()
-        top_edges_full = get_sparsified_MPSTplus(G, int(i*len(G.edges())/100))
-        print 'Sparsified Top in %s sec' %(time.time() - time2top)
-        SP_top = nx.Graph()
-        SP_top.add_edges_from(top_edges_full)
-        print len(SP_top), len(SP_top.edges())
-
-        track = i*10
-
-        save_for_LP("LP/A%s.dat" %track, "LP/b%s.dat" %track, SP_top, G,
-                    "LP/edge_order%s.dat" %track, "LP/D%s.dat" %track)
+    # for i in range(1, 11):
+    #     time2top = time.time()
+    #     top_edges_full = get_sparsified_top(G, int(i*len(G.edges())/1000))
+    #     print 'Sparsified Top in %s sec' %(time.time() - time2top)
+    #     SP_top = nx.Graph()
+    #     SP_top.add_edges_from(top_edges_full)
+    #     print len(SP_top), len(SP_top.edges())
+    #
+    #     track = i*10
+    #
+    #     save_for_LP("LP/A%s.dat" %track, "LP/b%s.dat" %track, SP_top, G,
+    #                 "LP/edge_order%s.dat" %track, "LP/D%s.dat" %track)
 
 
     # save_for_LP("A.dat", "b.dat", SP_top)
@@ -837,8 +902,8 @@ if __name__ == "__main__":
     # mpst_edges_full = get_sparsified_mpst(MPSTs, len(G.edges()))
     # print 'Sparsified MPST in %s sec' %(time.time() - time2mpst)
 
-    for track in range(1,11):
-        time2track = time.time()
+    # for track in range(1,11):
+    #     time2track = time.time()
         # print '------------------------------------'
         # print 'Step %s' %track
         # K = int(track*percentage*len(G.edges()))
@@ -1178,8 +1243,8 @@ if __name__ == "__main__":
         # with open("Sparsified_results/Redistributed_Top3_MC%s_avg.txt" %MC, "w+") as fp:
         #     json.dump(avg_top3_rd_error, fp)
 
-        print
-        print 'Spent %s for iteration' %(time.time() - time2track)
+        # print
+        # print 'Spent %s for iteration' %(time.time() - time2track)
 
     print "Finished execution in %s sec" %(time.time() - time2execute)
 

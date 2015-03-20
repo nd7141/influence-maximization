@@ -437,7 +437,7 @@ if __name__ == "__main__":
     x_lst = []
     y_lst = []
     for s in ["MP", "MPST"]:
-        with open("LP/mae%s.dat" %s) as f:
+        with open("LP/mae01%s.dat" %s) as f:
             x = []
             y = []
             for line in f:
