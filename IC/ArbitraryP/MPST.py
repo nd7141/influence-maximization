@@ -567,51 +567,57 @@ def ChungLu(G):
                 CL[(u,v)] /= 2
     return CL
 
-def exp_degrees(G, directed=False):
+def exp_degrees(G):
     '''
     Expected to have -log(p_e) as weights in G.
     :param G:
     :return:
     '''
-    if not directed:
-        exp_d = dict(zip(G, [0]*len(G)))
-        for v in G:
-            p = 0
-            for u in G[v]:
-                p += exp(1)**(-G[v][u]['weight'])
-            exp_d[v] = p
-        return exp_d
-    else:
-        in_d = dict(zip(G, [0]*len(G)))
-        out_d = dict(zip(G, [0]*len(G)))
-        for v in G:
-            for u in G[v]:
-                out_d[v] += exp(1)**(-G[v][u]['weight'])
-                in_d[u] += exp(1)**(-G[v][u]['weight'])
-        return in_d, out_d
+    in_d = dict(zip(G, [0]*len(G)))
+    out_d = dict(zip(G, [0]*len(G)))
+    for v in G:
+        for u in G[v]:
+            out_d[v] += exp(1)**(-G[v][u]['weight'])
+            in_d[u] += exp(1)**(-G[v][u]['weight'])
+    return in_d, out_d
 
-#TODO check function
 def pres_dir_degrees(edges, degrees, dir="in"):
     '''
     Preserve directed degrees
-    :param edges:
+    :param edges: directed edges
     :param in_degrees: dictionary of expected in_degrees
     :return: Q -- graph from edges with preserved in_degrees
     '''
     Q = nx.DiGraph()
     Q.add_edges_from(edges)
+    if dir == "in":
+        denom = {v: sum([degrees[u] for (u,_) in Q.in_edges(v)]) for v in Q}
+    elif dir == "out":
+        denom = {v: sum([degrees[u] for (_,u) in Q.out_edges(v)]) for v in Q}
+
+    assert denom > 0
     for e in edges:
-        denom = 0
-        if dir == "out":
-            for (v,_) in Q.out_edges(e[0]):
-                denom += degrees[v]
-        elif dir == "in":
-            for (v,_) in Q.in_edges(e[0]):
-                denom += degrees[v]
-        p = degrees[e[0]]*degrees[e[1]]/denom
-        Q.add_edge(e[0],e[1],{"weight": -log(p)})
+        if dir == "in":
+            sum_d = denom[e[1]]
+        elif dir == "out":
+            sum_d = denom[e[0]]
+        p = degrees[e[0]]*degrees[e[1]]/sum_d
+        Q.add_edge(*e, **{"weight": -log(p)})
     return Q
 
+def get_undirected_prob(Q):
+    '''
+
+    :param Q: directed graph
+    :return: undirected graph where probabiltiies is some function of previous probabilities
+    '''
+    G = nx.Graph()
+    for e in Q.edges(data=True):
+        u,v,log_p1 = e[0],e[1],e[2]['weight']
+        log_p2 = Q[v][u]['weight']
+        p = exp(1)**(-log_p1) + exp(1)**(-log_p2)
+        G.add_edge(u,v,{'weight': -log(p/2)})
+    return G
 
 def get_graph_from_file(filename, directed=False):
     SP = nx.Graph()
@@ -768,21 +774,17 @@ if __name__ == "__main__":
     G.add_edge(4, 5, weight=-log(.15))
     G.add_edge(5, 6, weight=-log(0.5))
 
-    in_d, out_d = exp_degrees(G, True)
+    in_d, out_d = exp_degrees(G)
+    print in_d, out_d
     Q = pres_dir_degrees(nx.DiGraph(G).edges(), in_d)
 
-    Gp = nx.Graph()
-    for e in Q.edges(data=True):
-        p = -log(exp(1)**(-Q[e[1]][e[0]]['weight']))
-        Gp.add_edge(e[0],e[1],{'weight': p})
+    Q1 = pres_dir_degrees(nx.DiGraph(G).edges(), in_d)
+    Q2 = pres_dir_degrees(nx.DiGraph(G).edges(), out_d, 'out')
 
-    for e in G.edges():
-        print e, G[e[0]][e[1]]['weight']
-    print '-----------------'
-    for e in Gp.edges():
-        print e, Gp[e[0]][e[1]]['weight']
-    print exp_degrees(G)
-    print exp_degrees(Gp)
+    Q3 = get_undirected_prob(Q1)
+    print exp_degrees(Q3)
+
+
     console = []
     #
     # save_for_LP("A.dat", "b.dat", G, G)
