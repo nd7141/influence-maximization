@@ -581,12 +581,14 @@ def exp_degrees(G):
             in_d[u] += exp(1)**(-G[v][u]['weight'])
     return in_d, out_d
 
-def pres_dir_degrees(edges, degrees, dir="in"):
+def pres_dir_degrees_ChungLu(edges, degrees, dir="in"):
     '''
     Preserve directed degrees
     :param edges: directed edges
     :param in_degrees: dictionary of expected in_degrees
     :return: Q -- graph from edges with preserved in_degrees
+
+    Note the problem that sometimes probabilities = 0 or > 1.
     '''
     Q = nx.DiGraph()
     Q.add_edges_from(edges)
@@ -601,9 +603,31 @@ def pres_dir_degrees(edges, degrees, dir="in"):
             sum_d = denom[e[1]]
         elif dir == "out":
             sum_d = denom[e[0]]
+        if degrees[e[0]]*degrees[e[1]] > sum_d:
+            print '(',e[0],e[1],') -->', degrees[e[0]]*degrees[e[1]], sum_d
+        print '(',e[0],e[1],') -->', degrees[e[0]], degrees[e[1]], sum_d
         p = degrees[e[0]]*degrees[e[1]]/sum_d
+        print p
         Q.add_edge(*e, **{"weight": -log(p)})
     return Q
+
+def pres_dir_degrees_equally(edges, degrees, dir="in"):
+    '''
+    Preserve directed degrees
+    :param edges: directed edges
+    :param degrees: dictionary of expected in_degrees
+    :return: Q -- graph from edges with preserved in_degrees
+    '''
+    Q = nx.DiGraph()
+    Q.add_edges_from(edges)
+    for e in edges:
+        if dir == "in":
+            p = degrees[e[1]]/len(Q.in_edges(e[1]))
+        elif dir == "out":
+            p = degrees[e[0]]/len(Q.out_edges(e[0]))
+        Q.add_edge(e[0],e[1],weight=-log(p))
+    return Q
+
 
 def get_undirected_prob(Q):
     '''
@@ -767,22 +791,49 @@ if __name__ == "__main__":
     # pairs = [(0,1)]
 
     # # protein graph
-    G = nx.Graph()
-    G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+    #
+    # G.add_edge(0, 4, weight=-log(.1))
+    # G.add_edge(4, 5, weight=-log(.15))
+    # G.add_edge(5, 6, weight=-log(0.5))
+    #
+    # in_d, out_d = exp_degrees(G)
+    # print in_d
+    # print out_d
+    # time2prob = time.time()
+    # Q = pres_dir_degrees_equally(nx.DiGraph(G).edges(), in_d, 'in')
+    # print exp_degrees(Q)
+    # print 'Finished', time.time() - time2prob
 
-    G.add_edge(0, 4, weight=-log(.1))
-    G.add_edge(4, 5, weight=-log(.15))
-    G.add_edge(5, 6, weight=-log(0.5))
+    names2numb = dict()
+    count = 0
+    G = nx.DiGraph()
+    with open('memeS.probs') as f:
+        next(f)
+        for line in f:
+            data = line.split()
+            if data[0] not in names2numb:
+                names2numb[data[0]] = count
+                count += 1
+            if data[1] not in names2numb:
+                names2numb[data[1]] = count
+                count += 1
+            G.add_edge(names2numb[data[0]], names2numb[data[1]], weight=-log(float(data[2])))
 
     in_d, out_d = exp_degrees(G)
-    print in_d, out_d
-    Q = pres_dir_degrees(nx.DiGraph(G).edges(), in_d)
+    print in_d
+    # print sorted(in_d.iteritems(), key=lambda(k,v):v)
+    # print sorted(out_d.iteritems(), key=lambda(k,v):v)
 
-    Q1 = pres_dir_degrees(nx.DiGraph(G).edges(), in_d)
-    Q2 = pres_dir_degrees(nx.DiGraph(G).edges(), out_d, 'out')
+    Q = pres_dir_degrees_equally(G.edges(), out_d, 'out')
+    in_d, out_d = exp_degrees(Q)
+    print in_d
+    for e in Q.edges(data=True):
+        print e[0],e[1],exp(1)**(-Q[e[0]][e[1]]['weight'])
+    # print sorted(in_d.iteritems(), key=lambda(k,v):v)
+    # print sorted(out_d.iteritems(), key=lambda(k,v):v)
 
-    Q3 = get_undirected_prob(Q1)
-    print exp_degrees(Q3)
 
 
     console = []
