@@ -210,7 +210,7 @@ def get_rel_for_pw(PW, pairs=None):
             u = pair[0]
             v = pair[1]
             r = 0
-            if u in PW and v in PW and nx.has_path(G, u, v):
+            if u in PW and v in PW and nx.has_path(PW, u, v):
                 r = 1
             rel[(u, v)] = r
             rel[(v, u)] = r
@@ -622,9 +622,9 @@ def pres_dir_degrees_equally(edges, degrees, dir="in"):
     Q.add_edges_from(edges)
     for e in edges:
         if dir == "in":
-            p = degrees[e[1]]/len(Q.in_edges(e[1]))
+            p = min(degrees[e[1]]/len(Q.in_edges(e[1])), 1)
         elif dir == "out":
-            p = degrees[e[0]]/len(Q.out_edges(e[0]))
+            p = min(degrees[e[0]]/len(Q.out_edges(e[0])), 1)
         Q.add_edge(e[0],e[1],weight=-log(p))
     return Q
 
@@ -710,8 +710,8 @@ def save_for_LP(f1, f2, G, G_orig, f3 = "edge_order.txt", f4 = "D.txt"):
     Saves matrix A and vector b to files f1 and f2,
     for linear programming min||Ax - b||, s.t. 0 <= x <= 1 in MATLAB.
 
-    Save edge order to f3, exp_degree to f4,
-    sum of probabilities of sparsified edges to f5.
+    Save edge order to f3,
+    sum of probabilities of sparsified edges to f4.
 
     Expected to have -log(p_e) as weights in G.
     '''
@@ -752,15 +752,111 @@ def save_for_LP(f1, f2, G, G_orig, f3 = "edge_order.txt", f4 = "D.txt"):
         f.write('%s\n' %len(G_orig))
         f.write('%s\n' %surplus)
 
+def save_for_LP_dir (Ainf, Aoutf, dinf, doutf, Q, G, e_ordf, D):
+    '''
+    Saves matrices for linear program max|x| s.t. din > Ain*x, dout > Aout*x
+    :param Ainf: filenames
+    :param Aoutf:
+    :param dinf:
+    :param doutf:
+    :param Q: sparsified directed graph
+    e_ord: edges for which probabilities should be found
+    D: number of nodes and surplus for sparsified nodes
+    G: original graph
+    :return:
+    '''
+    edges = Q.edges()
+
+    # calculate in_degree, out_degree of u
+    win = dict()
+    wout = dict()
+    for u in G:
+        win[u] = 0
+        wout[u] = 0
+        for (v,_) in G.in_edges(u):
+            p = exp(1)**(-G[v][u]['weight'])
+            win[u] += p
+        for (_,v) in G.out_edges(u):
+            p = exp(1)**(-G[u][v]['weight'])
+            wout[u] += p
+
+    # save order of edges
+    e_ord = dict() # order of edges
+    v_ord = dict() # order of nodes
+    count = 0
+    for e in edges:
+        e_ord[(e[0],e[1])] = count
+        e_ord[(e[1],e[0])] = count
+        count += 1
+    count = 0
+    for u in Q:
+        v_ord[u] = count
+        count += 1
+    with open(e_ordf, "w+") as f:
+        for e in edges:
+            f.write("%s %s\n" %(e[0], e[1]))
+
+    # save Ain and Aout
+    nodes = set()
+    with open(Ainf, "w+") as f1, open(Aoutf, "w+") as f2:
+        for e in edges:
+            f1.write("%s %s %s\n" %(v_ord[e[1]], e_ord[e], 1))
+            f2.write("%s %s %s\n" %(v_ord[e[0]], e_ord[e], 1))
+            nodes.add(e[0])
+            nodes.add(e[1])
+
+    # save din and dout
+    with open(dinf, "w+") as f1, open(doutf, "w+") as f2:
+        for u in nodes:
+            f1.write("%s %s %s\n" %(v_ord[u], 1, win[u]))
+            f2.write("%s %s %s\n" %(v_ord[u], 1, wout[u]))
+
+    # save number of nodes and surplus
+    n = len(G)
+    nodes = set(G).difference(Q)
+    print "# nodes: ", len(nodes),
+    in_surplus = sum([win[u] for u in nodes])
+    out_surplus = sum([wout[u] for u in nodes])
+    print "in-degree surplus", in_surplus
+    print "out-degree surplus", out_surplus
+    with open(D, "w+") as f:
+        f.write("%s\n" %(n))
+        f.write("%s\n" %(in_surplus + out_surplus))
+
+
 if __name__ == "__main__":
     time2execute = time.time()
 
-    # time2read = time.time()
-    # flickr = "Flickr.txt_reduced-FF_5000.txt"
-    # G = get_graph_from_file(flickr, False)
-    # print "Read graph in % sec" %(time.time() - time2read)
-    # print "G: n = %s m = %s" %(len(G), len(G.edges()))
-    # print
+    time2read = time.time()
+    datasets = "datasets/"
+    flickr = datasets + "Flickr.txt_reduced-FF_5000.txt"
+    G = get_graph_from_file(flickr, False)
+    print "Read graph in % sec" %(time.time() - time2read)
+    print "G: n = %s m = %s" %(len(G), len(G.edges()))
+    print
+
+
+    # for i in range(1,11):
+    #     edges = get_sparsified_MPSTplus(G, int(i*len(G.edges())/10))
+    #     Q = nx.Graph()
+    #     Q.add_edges_from(edges)
+    #     save_for_LP("Flickr2/A%s.dat" %(i*10), "Flickr2/b%s.dat" %(i*10), Q, G, "Flickr2/e%s.txt" %(i*10), "Flickr2/D%s.txt" %(i*10))
+
+    # for i in range(1,11):
+    #     with open("Flickr2/x%s.dat" %(i*10)) as f, open("Flickr2/e%s.txt" %(i*10)) as h, open("Flickr2/K%s.txt" %(i*10), "w+") as g:
+    #         h_text = h.read().split('\n')
+    #         for j, line in enumerate(f):
+    #             p = float(line)
+    #             edge = h_text[j].split()
+    #             g.write("%s %s %s\n" %(edge[0], edge[1], p))
+    #             g.write("%s %s %s\n" %(edge[1], edge[0], p))
+    #
+    #
+    # for i in range(1,11):
+    #     G = get_graph_from_file("Flickr2/K%s.txt" %(i*10), True)
+    #     print i*10, len(G), len(G.edges())
+
+
 
     # time2sparsify = time.time()
     # get_sparsified_MPSTplus(G, int(len(G.edges())/10))
@@ -791,13 +887,25 @@ if __name__ == "__main__":
     # pairs = [(0,1)]
 
     # # protein graph
-    # G = nx.Graph()
-    # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
-    #
-    # G.add_edge(0, 4, weight=-log(.1))
-    # G.add_edge(4, 5, weight=-log(.15))
-    # G.add_edge(5, 6, weight=-log(0.5))
-    #
+    G = nx.Graph()
+    G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+
+    G.add_edge(0, 4, weight=-log(.1))
+    G.add_edge(4, 5, weight=-log(.15))
+    G.add_edge(5, 6, weight=-log(0.5))
+
+    G = nx.DiGraph()
+    G.add_edges_from([(1,2),(1,3),(2,3)])
+
+    G = nx.DiGraph()
+    G.add_weighted_edges_from([(1,2,1.3),(1,3,1.5),(2,3,1.7)])
+    Q = G.copy()
+    Q.remove_edge(1,2)
+
+    save_for_LP_dir("LP/Ain.txt", "LP/Aout.txt", "LP/din.txt", "LP/dout.txt", Q, G, "LP/e.txt", "LP/D.txt")
+
+    console = []
+
     # in_d, out_d = exp_degrees(G)
     # print in_d
     # print out_d
@@ -806,38 +914,46 @@ if __name__ == "__main__":
     # print exp_degrees(Q)
     # print 'Finished', time.time() - time2prob
 
-    names2numb = dict()
-    count = 0
-    G = nx.DiGraph()
-    with open('memeS.probs') as f:
-        next(f)
-        for line in f:
-            data = line.split()
-            if data[0] not in names2numb:
-                names2numb[data[0]] = count
-                count += 1
-            if data[1] not in names2numb:
-                names2numb[data[1]] = count
-                count += 1
-            G.add_edge(names2numb[data[0]], names2numb[data[1]], weight=-log(float(data[2])))
-
-    in_d, out_d = exp_degrees(G)
-    print in_d
+    # names2numb = dict()
+    # count = 0
+    # G = nx.DiGraph()
+    # with open('memeS.probs') as f:
+    #     next(f)
+    #     for line in f:
+    #         data = line.split()
+    #         if data[0] not in names2numb:
+    #             names2numb[data[0]] = count
+    #             count += 1
+    #         if data[1] not in names2numb:
+    #             names2numb[data[1]] = count
+    #             count += 1
+    #         G.add_edge(names2numb[data[0]], names2numb[data[1]], weight=-log(float(data[2])))
+    #
+    # in_d, out_d = exp_degrees(G)
+    # print in_d
     # print sorted(in_d.iteritems(), key=lambda(k,v):v)
     # print sorted(out_d.iteritems(), key=lambda(k,v):v)
 
-    Q = pres_dir_degrees_equally(G.edges(), out_d, 'out')
-    in_d, out_d = exp_degrees(Q)
-    print in_d
-    for e in Q.edges(data=True):
-        print e[0],e[1],exp(1)**(-Q[e[0]][e[1]]['weight'])
+    # Q = pres_dir_degrees_equally(G.edges(), out_d, 'out')
+    # in_d, out_d = exp_degrees(Q)
+    # print in_d
+    # for e in Q.edges(data=True):
+    #     print e[0],e[1],exp(1)**(-Q[e[0]][e[1]]['weight'])
     # print sorted(in_d.iteritems(), key=lambda(k,v):v)
     # print sorted(out_d.iteritems(), key=lambda(k,v):v)
 
 
+    # for i in range(1,11):
+    #     edges = get_sparsified_top(G, int(i*len(G.edges())/10))
+    #     Q = pres_dir_degrees_equally(edges, out_d, "out")
+    #     Q.add_nodes_from(G)
+    #     print len(Q), len(Q.edges())
+        # with open("memeM/memeM_%s.txt" %(i*10), "w+") as f:
+        #     for e in Q.edges(data=True):
+        #         f.write("%s %s %s\n" %(e[0], e[1], exp(1)**(-e[2]['weight'])))
 
     console = []
-    #
+
     # save_for_LP("A.dat", "b.dat", G, G)
 
     # edge_order = []

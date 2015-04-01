@@ -1,12 +1,12 @@
 clear all; 
 
-fmae = strcat('LP/mae01MP.dat');
-dlmwrite(fmae, []);
+%    fmae = strcat('Flickr/mae01MP.dat');
+%    dlmwrite(fmae, []);
 
 for i=10:10:100
-    fA = strcat('LP/A', num2str(i), '.dat');
-    fb = strcat('LP/b', num2str(i), '.dat');
-    fD = strcat('LP/D', num2str(i), '.dat');
+    fA = strcat('Flickr2/A', num2str(i), '.dat');
+    fb = strcat('Flickr2/b', num2str(i), '.dat');
+    fD = strcat('Flickr2/D', num2str(i), '.txt');
     
     A = load(fA);
     b = load(fb);
@@ -27,7 +27,10 @@ for i=10:10:100
     toc 
 
     a = sum(abs(d - A1*x)); % sum of discreapncies of non-sparsified nodes
-    mae = (s + a)/n;
+    mae = (s + a)/n
+
+    fprob = strcat('Flickr2/x', num2str(i), '.dat');
+    dlmwrite(fprob, x);
     
-    dlmwrite(fmae, [i/100, mae], '-append');
+%     dlmwrite(fmae, [i/100, mae], '-append');
 end

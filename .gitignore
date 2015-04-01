@@ -1,4 +1,5 @@
 *.idea
 *.pyc
 *.dat
+*.txt
 purgatory/

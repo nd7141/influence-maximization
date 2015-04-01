@@ -50,7 +50,7 @@ def visualiseResults(x_lst, y_lst, filename="tempResults.png", model="Model", da
     # [tick.label.set_fontsize(8) for tick in ax.xaxis.get_major_ticks()]
     # ax.set_yticks([150,250,350,550,750,850,950,1050,1150,1250,1350,1450,1550,1750,1950,2150])
     # xlim = 151
-    # ax.set_xticks(range(10, 210, 20))
+    ax.set_xticks(range(10, 210, 10))
 
     # ax.set_xscale("log")
     ax.set_yscale("log")
@@ -62,11 +62,11 @@ def visualiseResults(x_lst, y_lst, filename="tempResults.png", model="Model", da
     legends = ["Random", "Harvester400", "HarvesterADR", "PMIA"]
     legends = ["Random", "MP", "MP+", "SF", "ADR"]
     legends = map(lambda v: "K%s" %v, range(20, 110, 20))
-    legends = map(lambda v: "K%s" %v, range(10,110,10))
-    legends = ["MP20","MP50","MP100","MPST20","MPST50","MPST100","Spine20","Spine50","Spine100"]
-    legends = ["MP50","MPST50","Spine50"]
-    legends = ["MP+LP", "MPST+LP"]
-    colors = ['b', 'r', 'g', 'm', 'k', 'y', 'c', u'#fe2fb3', u'#aaaeaa', u'#ab3abc', u'#1111ee']
+    legends = map(lambda v: "MPST%s" %v, range(10,110,10))
+    # legends = ["MP20","MP50","MP100","MPST20","MPST50","MPST100","Spine20","Spine50","Spine100"]
+    # legends = ["MP50","MPST50","Spine50"]
+    # legends = ["MP+LP", "MPST+LP"]
+    colors = ['b', 'r', 'g', 'm', 'k', 'y', 'c', u'#fe2fb3', u'#abfeaa', u'#cccabc', u'#1111ee']
     marks = ["o", "s", "^", "v", 'x', "<", ">", '8', "<", ">", '8']
     colors = colors[::1]
     marks = marks[::1]
@@ -99,10 +99,10 @@ def visualiseResults(x_lst, y_lst, filename="tempResults.png", model="Model", da
     # plt.ylim([800,1300])
     # plt.ylim([1500,2200])
 
-    plt.legend(plots, legends, loc=1, prop={'size': 18})
+    plt.legend(plots, legends, loc=4, prop={'size': 18})
     # plt.grid()
-    plt.xlabel('Percentage of edges')
-    plt.ylabel('MAE')
+    plt.xlabel('Seed set')
+    plt.ylabel('Spread (nodes)')
     # ax = plt.gca()
     # ax.set_xlabel('Number of PW', fontsize = 42)
     # ax.xaxis.set_label_coords(.5, -0.03)
@@ -436,17 +436,31 @@ if __name__ == "__main__":
 
     x_lst = []
     y_lst = []
-    for s in ["MP", "MPST"]:
-        with open("LP/mae01%s.dat" %s) as f:
+    for i in range(1,11):
+        with open("Flickr2/spread/K%s.txt" %(i*10)) as f:
             x = []
             y = []
             for line in f:
-                k, spread = map(float, line.split(','))
-                x.append(k)
-                y.append(spread)
+                d = map(float, line.split())
+                x.append(d[0])
+                y.append(d[1])
             x_lst.append(x)
             y_lst.append(y)
-    visualiseResults(x_lst, y_lst, "Sparsified_results/Spread.png", model, "Flickr: n=5K; m=800K")
+    visualiseResults(x_lst, y_lst, "Sparsified_results/Memory.png", model, "Flickr: n=5K; m=800K")
+
+    # x_lst = []
+    # y_lst = []
+    # for s in ["MP", "MPST"]:
+    #     with open("LP/mae01%s.dat" %s) as f:
+    #         x = []
+    #         y = []
+    #         for line in f:
+    #             k, spread = map(float, line.split(','))
+    #             x.append(k)
+    #             y.append(spread)
+    #         x_lst.append(x)
+    #         y_lst.append(y)
+    # visualiseResults(x_lst, y_lst, "Sparsified_results/Spread.png", model, "Flickr: n=5K; m=800K")
 
     console = []
 
