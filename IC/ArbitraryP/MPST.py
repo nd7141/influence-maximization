@@ -765,6 +765,8 @@ def save_for_LP_dir (Ainf, Aoutf, dinf, doutf, Q, G, e_ordf, D):
     G: original graph
     :return:
     '''
+
+    assert type(Q) == type(nx.DiGraph())
     edges = Q.edges()
 
     # calculate in_degree, out_degree of u
@@ -783,12 +785,12 @@ def save_for_LP_dir (Ainf, Aoutf, dinf, doutf, Q, G, e_ordf, D):
     # save order of edges
     e_ord = dict() # order of edges
     v_ord = dict() # order of nodes
-    count = 0
+    count = 1
     for e in edges:
         e_ord[(e[0],e[1])] = count
         e_ord[(e[1],e[0])] = count
         count += 1
-    count = 0
+    count = 1
     for u in Q:
         v_ord[u] = count
         count += 1
@@ -805,9 +807,13 @@ def save_for_LP_dir (Ainf, Aoutf, dinf, doutf, Q, G, e_ordf, D):
             nodes.add(e[0])
             nodes.add(e[1])
 
+    print len(nodes)
+
     # save din and dout
     with open(dinf, "w+") as f1, open(doutf, "w+") as f2:
-        for u in nodes:
+        for i, u in enumerate(nodes):
+            if i == 54307:
+                print u, v_ord[u], win[u], wout[u]
             f1.write("%s %s %s\n" %(v_ord[u], 1, win[u]))
             f2.write("%s %s %s\n" %(v_ord[u], 1, wout[u]))
 
@@ -830,17 +836,19 @@ if __name__ == "__main__":
     time2read = time.time()
     datasets = "datasets/"
     flickr = datasets + "Flickr.txt_reduced-FF_5000.txt"
-    G = get_graph_from_file(flickr, False)
+    flixster = "Flixster/" + "flixster2.txt"
+    G = get_graph_from_file(flixster, True)
     print "Read graph in % sec" %(time.time() - time2read)
     print "G: n = %s m = %s" %(len(G), len(G.edges()))
     print
 
-
-    # for i in range(1,11):
-    #     edges = get_sparsified_MPSTplus(G, int(i*len(G.edges())/10))
-    #     Q = nx.Graph()
-    #     Q.add_edges_from(edges)
-    #     save_for_LP("Flickr2/A%s.dat" %(i*10), "Flickr2/b%s.dat" %(i*10), Q, G, "Flickr2/e%s.txt" %(i*10), "Flickr2/D%s.txt" %(i*10))
+    for i in range(1,2):
+        print i
+        edges = get_sparsified_top(G, int(i*len(G.edges())/10))
+        Q = nx.DiGraph()
+        Q.add_edges_from(edges)
+        save_for_LP_dir("Flixster/LP/Ain%s.dat" %(i*10), "Flixster/LP/Aout%s.dat" %(i*10), "Flixster/LP/din%s.dat" %(i*10), "Flixster/LP/dout%s.dat" %(i*10),
+                        Q, G, "Flixster/LP/e%s.txt" %(i*10), "Flixster/LP/D%s.txt" %(i*10))
 
     # for i in range(1,11):
     #     with open("Flickr2/x%s.dat" %(i*10)) as f, open("Flickr2/e%s.txt" %(i*10)) as h, open("Flickr2/K%s.txt" %(i*10), "w+") as g:
@@ -887,22 +895,22 @@ if __name__ == "__main__":
     # pairs = [(0,1)]
 
     # # protein graph
-    G = nx.Graph()
-    G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
-
-    G.add_edge(0, 4, weight=-log(.1))
-    G.add_edge(4, 5, weight=-log(.15))
-    G.add_edge(5, 6, weight=-log(0.5))
-
-    G = nx.DiGraph()
-    G.add_edges_from([(1,2),(1,3),(2,3)])
-
-    G = nx.DiGraph()
-    G.add_weighted_edges_from([(1,2,1.3),(1,3,1.5),(2,3,1.7)])
-    Q = G.copy()
-    Q.remove_edge(1,2)
-
-    save_for_LP_dir("LP/Ain.txt", "LP/Aout.txt", "LP/din.txt", "LP/dout.txt", Q, G, "LP/e.txt", "LP/D.txt")
+    # G = nx.Graph()
+    # G.add_weighted_edges_from([(0,2,-log(.3)), (1,2,-log(.3)), (3,4,-log(.3)), (3,5,-log(.3)), (2,3,-log(.2))])
+    #
+    # G.add_edge(0, 4, weight=-log(.1))
+    # G.add_edge(4, 5, weight=-log(.15))
+    # G.add_edge(5, 6, weight=-log(0.5))
+    #
+    # G = nx.DiGraph()
+    # G.add_edges_from([(1,2),(1,3),(2,3)])
+    #
+    # G = nx.DiGraph()
+    # G.add_weighted_edges_from([(1,2,1.3),(1,3,1.5),(2,3,1.7)])
+    # Q = G.copy()
+    # Q.remove_edge(1,2)
+    #
+    # save_for_LP_dir("LP/Ain.txt", "LP/Aout.txt", "LP/din.txt", "LP/dout.txt", Q, G, "LP/e.txt", "LP/D.txt")
 
     console = []
 
