@@ -1,7 +1,6 @@
 from __future__ import division
 import networkx as nx
 import json, time, random, os, math
-from Graphs import Hep, read_adjacency_list, HEP_NETWORK_FILENAME
 from Harvester import make_possible_world
 import numpy as np
 from Models import Uniform
@@ -26,61 +25,6 @@ def write_PWs(edge_file, MC, output_file):
                     u,v,p = map(float, line.split())
                     if random.random() <= p:
                         g.write("%d %d %s\n" %(u,v,p))
-
-# write_PWs("hep15233_2.txt", 100, "Sparsified_results/Normal_graph/PW/hep15233_2/hep15233_2_mc")
-
-Ep1 = dict()
-sergei2pano = dict()
-pano2sergei = dict()
-counter = 0
-nodes = []
-
-MC = 100
-type = "Sparsified"
-# for i in range(10,20,10):
-#     if not os.path.exists("Sparsified_results/%s_graph/PW/hep15233_2_K%s" %(type,i)):
-#         os.makedirs("Sparsified_results/%s_graph/PW/hep15233_2_K%s" %(type,i))
-#
-#     edge_file = "Sparsified_results/%s_graph/hep15233_2_K%s.txt" %(type,i)
-#     output_file = "Sparsified_results/%s_graph/PW/hep15233_2_K%s/hep15233_2_K%s_mc" %(type,i,i)
-#     write_PWs(edge_file, MC, output_file)
-#     print i
-
-
-# Ep = dict()
-# with open('Ep_HEP_Multivalency_with_weights.txt') as f:
-#     for line in f:
-#         v1, v2, p = map(float, line.split())
-#         e = map(int, [v1, v2])
-#         Ep[(e[0], e[1])] = p
-#         Ep[(e[1], e[0])] = p
-
-# PW1 = []
-# PW2 = []
-# for mc in range(1,3):
-#     PW1.append(read_adjacency_list("./PWs/Random_PWs/MC%s_Sergei.txt" %mc))
-#     PW2.append(make_possible_world(G, Ep))
-
-
-
-# with open("hep15233_2.txt") as f:
-#     for line in f:
-#         edge = map(float, line.split())
-#         u = int(edge[0])
-#         v = int(edge[1])
-#         p = edge[2]
-#         Ep1[(u,v)] = p
-#         Ep1[(v,u)] = p
-#         if u not in sergei2pano:
-#             sergei2pano[u] = counter
-#             pano2sergei[counter] = u
-#             counter += 1
-#             nodes.append(u)
-#         if v not in sergei2pano:
-#             sergei2pano[v] = counter
-#             pano2sergei[counter] = v
-#             counter += 1
-#             nodes.append(v)
 
 def cleanGraph(infile, outfile, model="no_model"):
     '''
@@ -111,7 +55,7 @@ def cleanGraph(infile, outfile, model="no_model"):
                 print 'Processed %s edges' %i
                 track += 1
             try:
-                u, v = map(int, line.split())
+                u, v, p = map(float, line.split())
             except:
                 continue
             if u not in old2new:
@@ -126,7 +70,7 @@ def cleanGraph(infile, outfile, model="no_model"):
 
             # collect content
             if model == "no_model":
-                content.append("%s %s" %(old2new[u], old2new[v]))
+                content.append("%s %s %s" %(old2new[u], old2new[v], p))
             elif model == "wc":
                 wc_content.append((old2new[u], old2new[v]))
             else:
@@ -150,7 +94,78 @@ def cleanGraph(infile, outfile, model="no_model"):
             g.write("\n".join(content))
     print 'Total time:', time.time() - time2write
 
-# cleanGraph(infile, outfile, "no_model")
+def get_data_for_spine(sn_in, act_in, sn_out, act_out):
+    '''
+    :param sn_in: social network structure
+    :param act_in: action log
+    :param sn_out: tabbed social network
+    :param act_out: action log with removed duplicated actions
+    :return:
+    '''
+    #TODO rewrite act_in file after rewriting sn_in
+    content = [] # content to write to the file
+    with open(sn_in) as f:
+        old2new = dict()
+        mapped = 0
+        track = 1
+        for i, line in enumerate(f):
+            if i == track*100000:
+                print 'Processed %s edges' %i
+                track += 1
+            try:
+                u, v = map(int, line.split())
+            except:
+                continue
+            if u not in old2new:
+                old2new[u] = mapped
+                mapped += 1
+            if v not in old2new:
+                old2new[v] = mapped
+                mapped += 1
+            content.append("%s %s %s" %(old2new[u], old2new[v]))
+
+    with open("./tmp.txt", "w+") as g:
+        g.write("\n".join(content))
+
+    with open(act_in) as f, open(act_out, "w+") as g:
+        for line in f:
+            d = line.split()
+            if d[0] == d[1]:
+                continue
+            else:
+                g.write(line)
+
+    with open("./tmp.txt") as f, open(sn_out, "w+") as g:
+        for line in f:
+            d = line.split()
+            g.write("%s\t%s\n" %(d[0], d[1]))
+
+    os.remove("./tmp.txt")
+
+# cleanGraph("Flixster/flixster.txt", "Flixster/flixster2.txt", "no_model")
+
+# with open("Flixster/flixster2.txt") as f, open("Flixster/flixster3.txt", "w+") as g:
+#     for line in f:
+#         d = map(float, line.split())
+#         if d[2] > 1e-10:
+#             g.write(line)
+
+# with open("Goodreads/goodreads_actions.out") as f, open("Goodreads/goodreads.out", "w+") as g:
+#     line = next(f)
+#     cur_node = int(line.split()[0])
+#     g.write("\t%s\t0\n" %cur_node)
+#     g.write(line)
+#     for i, line in enumerate(f):
+#         data = line.split()
+#         if cur_node == int(data[0]):
+#             g.write(line)
+#         else:
+#             cur_node = int(data[0])
+#             g.write("\t%s\t0\n" %cur_node)
+#             g.write(line)
+
+
+
 
 # G = nx.Graph()
 # from math import log
