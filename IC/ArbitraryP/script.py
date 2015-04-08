@@ -102,7 +102,6 @@ def get_data_for_spine(sn_in, act_in, sn_out, act_out):
     :param act_out: action log with removed duplicated actions
     :return:
     '''
-    #TODO rewrite act_in file after rewriting sn_in
     content = [] # content to write to the file
     with open(sn_in) as f:
         old2new = dict()
@@ -122,12 +121,24 @@ def get_data_for_spine(sn_in, act_in, sn_out, act_out):
             if v not in old2new:
                 old2new[v] = mapped
                 mapped += 1
-            content.append("%s %s %s" %(old2new[u], old2new[v]))
+            content.append("%s %s" %(old2new[u], old2new[v]))
+
+    with open(act_in) as f, open("./tmp2.txt", "w+") as g:
+        for line in f:
+            d = map(int, line.split())
+            if len(d) == 2:
+                if d[0] in old2new:
+                    g.write("\t%s\t%s\n" %(old2new[d[0]], d[1]))
+            else:
+                if d[0] in old2new and d[1] in old2new:
+                    g.write("%s\t%s\t%s\n" %(old2new[d[0]], old2new[d[1]], d[2]))
+
 
     with open("./tmp.txt", "w+") as g:
         g.write("\n".join(content))
+    print '-----------------------------'
 
-    with open(act_in) as f, open(act_out, "w+") as g:
+    with open("./tmp2.txt") as f, open(act_out, "w+") as g:
         for line in f:
             d = line.split()
             if d[0] == d[1]:
@@ -141,6 +152,47 @@ def get_data_for_spine(sn_in, act_in, sn_out, act_out):
             g.write("%s\t%s\n" %(d[0], d[1]))
 
     os.remove("./tmp.txt")
+    os.remove("./tmp2.txt")
+
+def prune_data_for_spine(sn_in, sn_out, act_in, act_out, N):
+    '''
+    Keep only subgraph of N nodes of original network from sn_in.
+    Keep actions only between remaining nodes
+    :param sn_in:
+    :param sn_out:
+    :param act_in:
+    :param act_out:
+    :param N: number of nodes to keep
+    :return:
+    '''
+    nodes = set()
+    with open(sn_in) as f, open(sn_out, "w+") as g:
+        for line in f:
+            d = map(int, line.split())
+            M = len(nodes)
+            if M < N - 1:
+                nodes.add(d[0])
+                nodes.add(d[1])
+            elif M == N - 1:
+                if d[0] not in nodes:
+                    nodes.add(d[0])
+                else:
+                    nodes.add(d[1])
+
+            if d[0] in nodes and d[1] in nodes:
+                g.write(line)
+
+    with open(act_in) as f, open(act_out, "w+") as g:
+        for line in f:
+            d = map(int, line.split())
+            if d[0] in nodes and d[1] in nodes:
+                g.write(line)
+
+# get_data_for_spine("Flixster/flixster.sn", "Flixster/flixster.out", "Flixster/flixster2.sn", "Flixster/flixster2.out")
+prune_data_for_spine("Flixster/flixster3.sn", "Flixster/flixster3_reduced.sn", "Flixster/flixster3.out", "Flixster/flixster3_reduced.out",  5000)
+#TODO find appropriate number of nodes after each spine doesn't break
+
+
 
 # cleanGraph("Flixster/flixster.txt", "Flixster/flixster2.txt", "no_model")
 
