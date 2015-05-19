@@ -10,9 +10,9 @@ from __future__ import division
 import networkx as nx
 from itertools import cycle
 from math import exp, log
-import random, time, sys, json
+import random, time, sys, json, os
 from collections import Counter
-from itertools import product
+from itertools import product, izip
 import matplotlib.pyplot as plt
 import matplotlib
 
@@ -807,7 +807,9 @@ def save_for_LP_dir (Ainf, Aoutf, dinf, doutf, Q, G, e_ordf, D):
             nodes.add(e[0])
             nodes.add(e[1])
 
-    print len(nodes)
+    sp_n = len(nodes)
+    sp_m = len(edges)
+    print len(nodes), len(edges)
 
     # save din and dout
     with open(dinf, "w+") as f1, open(doutf, "w+") as f2:
@@ -827,49 +829,71 @@ def save_for_LP_dir (Ainf, Aoutf, dinf, doutf, Q, G, e_ordf, D):
     print "out-degree surplus", out_surplus
     with open(D, "w+") as f:
         f.write("%s\n" %(n))
+        f.write("%s\n" %(sp_n))
+        f.write("%s\n" %(sp_m))
         f.write("%s\n" %(in_surplus + out_surplus))
+
+def construct_lp_graph(lp_file, e_file, output_file):
+    with open(lp_file) as f, open(e_file) as g, open(output_file, "w+") as h:
+        for x, y in izip(f,g):
+            d1 = x.split()
+            d2 = y.split()
+            h.write("%s %s %s\n" %(d2[0], d2[1], d1[0]))
+
+def get_possible_worlds(graph_file, PW_folder, I):
+    '''
+    Creates possible worlds from the graph file
+    :param graph_file: file of edges with probabilities
+    :param PW_folder: folder where to write PWs
+    :param I: number of possible worlds
+    :return:
+    '''
+    with open(graph_file) as f:
+        f_lines = f.readlines()
+    for i in range(I):
+        with open(PW_folder + "PW%s.txt" %(i+1), "w+") as f:
+            for line in f_lines:
+                d = map(float, line.split())
+                if random.random() < d[2]:
+                    f.write(line)
+
 
 
 if __name__ == "__main__":
     time2execute = time.time()
 
-    time2read = time.time()
-    datasets = "datasets/"
-    flickr = datasets + "Flickr.txt_reduced-FF_5000.txt"
-    flixster = "Flixster/" + "flixster2.txt"
-    G = get_graph_from_file(flixster, True)
-    print "Read graph in % sec" %(time.time() - time2read)
-    print "G: n = %s m = %s" %(len(G), len(G.edges()))
-    print
+    # time2read = time.time()
+    # datasets = "datasets/"
+    # flickr = datasets + "Flickr.txt_reduced-FF_5000.txt"
+    # # flixster = "Flixster/" + "flixster3.txt"
+    # G = get_graph_from_file(flickr, False)
+    # print "Read graph in % sec" %(time.time() - time2read)
+    # print "G: n = %s m = %s" %(len(G), len(G.edges()))
+    # print
 
-    for i in range(1,2):
+    # for i in range(1,11):
+    #     start = time.time()
+    #     edges = get_sparsified_MP_MPST(G, int(i*len(G.edges())/10))
+    #     Q = nx.DiGraph()
+    #     Q.add_edges_from(edges)
+    #     save_for_LP("Flickr/LP/A%s.dat" %i, "Flickr/LP/d%s.dat" %i, Q, G, "Flickr/LP/e%s.dat" %i, "Flickr/LP/D%s.dat" %i,)
+    #     print 'Spent %s sec for %i iteration' %(time.time() - start, i)
+
+    # rewrite file
+    with open("Flickr/runtime/runtime.txt", "w") as f:
+        pass
+    for i in range(1,11):
         print i
-        edges = get_sparsified_top(G, int(i*len(G.edges())/10))
-        Q = nx.DiGraph()
-        Q.add_edges_from(edges)
-        save_for_LP_dir("Flixster/LP/Ain%s.dat" %(i*10), "Flixster/LP/Aout%s.dat" %(i*10), "Flixster/LP/din%s.dat" %(i*10), "Flixster/LP/dout%s.dat" %(i*10),
-                        Q, G, "Flixster/LP/e%s.txt" %(i*10), "Flixster/LP/D%s.txt" %(i*10))
-
-    # for i in range(1,11):
-    #     with open("Flickr2/x%s.dat" %(i*10)) as f, open("Flickr2/e%s.txt" %(i*10)) as h, open("Flickr2/K%s.txt" %(i*10), "w+") as g:
-    #         h_text = h.read().split('\n')
-    #         for j, line in enumerate(f):
-    #             p = float(line)
-    #             edge = h_text[j].split()
-    #             g.write("%s %s %s\n" %(edge[0], edge[1], p))
-    #             g.write("%s %s %s\n" %(edge[1], edge[0], p))
-    #
-    #
-    # for i in range(1,11):
-    #     G = get_graph_from_file("Flickr2/K%s.txt" %(i*10), True)
-    #     print i*10, len(G), len(G.edges())
-
-
-
-    # time2sparsify = time.time()
-    # get_sparsified_MPSTplus(G, int(len(G.edges())/10))
-    # print 'Time to sparsify', time.time() - time2sparsify
-
+        graph_file = "Flickr/LP/G%i.txt" %(i*10)
+        PW_folder = "Flickr/PW/G%i/" %(i*10)
+        if not os.path.exists(PW_folder):
+            os.makedirs(PW_folder)
+        time2PW_start = time.time()
+        get_possible_worlds(graph_file, PW_folder, 100)
+        time2PW_finish = time.time() - time2PW_start
+        print 'Created worlds in %s sec' %(time2PW_finish)
+        with open("Flickr/runtime/runtime.txt", 'a+') as f:
+            f.write("%s\n" %(time2PW_finish))
 
     time2pairs = time.time()
     # G_rel_mc = dict()
